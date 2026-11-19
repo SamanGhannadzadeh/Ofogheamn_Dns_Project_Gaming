@@ -23,11 +23,17 @@ services:
       - "2080:2080/tcp"
       - "2080:2080/udp"
       - "8080:8080/tcp"
+      - "51820:51820/udp"
     volumes:
       - ofogheamn-etc:/etc/ofogheamn-dns
+    devices:
+      - /dev/net/tun:/dev/net/tun   # WireGuard gaming tunnel
     cap_add:
       - NET_BIND_SERVICE
       - NET_RAW   # ICMP speed-check of game endpoints
+      - NET_ADMIN # wg0 interface + NAT for the tunnel
+    sysctls:
+      net.ipv4.ip_forward: "1"
 
 volumes:
   ofogheamn-etc:

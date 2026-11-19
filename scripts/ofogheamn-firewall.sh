@@ -22,6 +22,18 @@ for proto in udp tcp; do
   done
 done
 
+if [ "$MODE" = "public" ]; then
+  # Public-resolver abuse guard: per-source rate limit on the
+  # plain DNS ports (open resolvers are amplification targets).
+  for proto in udp tcp; do
+    for port in 53; do
+      iptables -A "$CHAIN" -p "$proto" --dport "$port" -m hashlimit \
+        --hashlimit-name "ofogh_dns_$proto" --hashlimit 120/second \
+        --hashlimit-burst 240 --hashlimit-mode srcip -j DROP
+    done
+  done
+fi
+
 if [ "$MODE" = "private" ]; then
   iptables -A "$CHAIN" -i lo -j RETURN
   if [ -r "$ETC/allowlist.txt" ]; then

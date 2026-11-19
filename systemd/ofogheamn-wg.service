@@ -1,0 +1,13 @@
+[Unit]
+Description=Ofogheamn WireGuard gaming tunnel (wg0)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+ExecStart=/usr/local/bin/ofogheamn-wg-setup
+ExecStop=/bin/sh -c 'ip link del wg0 2>/dev/null || true'
+
+[Install]
+WantedBy=multi-user.target

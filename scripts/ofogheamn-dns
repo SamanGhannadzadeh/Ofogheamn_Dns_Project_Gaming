@@ -24,6 +24,7 @@ cmd_status() {
   echo "${B}== Ofogheamn DNS ==${N}"
   echo " DNS service : $(state ofogheamn-dns)   (UDP/TCP 53, DoT 853, DoH 443)"
   echo " Proxy       : $(state ofogheamn-proxy)   (mixed HTTP/SOCKS5 :2080, UDP on)"
+  echo " Tunnel (WG) : $(state ofogheamn-wg)   (wg0 :51820/udp, peers: $(ofogheamn-wg-peer list 2>/dev/null | wc -l))"
   echo " Panel       : $(state ofogheamn-panel)   (http://<server>:8080)"
   echo " Cache warmer: $(state cod-warmup.timer)   (CoD/gaming lists, every 4 min)"
   echo " Mode        : ${B}$(get_mode)${N}"
@@ -137,6 +138,16 @@ print("panel password updated")
 PY
     systemctl restart ofogheamn-panel 2>/dev/null || true ;;
   proxy) shift; cmd_proxy "$@" ;;
+  wg)
+    shift
+    case "${1:-status}" in
+      status) wg show wg0 2>/dev/null || echo "tunnel wg0 is down" ;;
+      add-peer) need_root; ofogheamn-wg-peer add "$2"; systemctl restart ofogheamn-wg && echo "${G}tunnel reloaded — send the config above to the device${N}" ;;
+      peers) ofogheamn-wg-peer list ;;
+      del-peer) need_root; ofogheamn-wg-peer remove "$2"; systemctl restart ofogheamn-wg && echo ok ;;
+      restart) need_root; systemctl restart ofogheamn-wg && echo ok ;;
+      *) echo "usage: ofogheamn-dns wg status|add-peer <name>|peers|del-peer <name>|restart" ;;
+    esac ;;
   restart) need_root; reload_dns ;;
   start) need_root; systemctl start "$SVC" ;;
   stop) need_root; systemctl stop "$SVC" ;;

@@ -35,6 +35,15 @@ if [ ! -f "$ETC/proxy-users.json" ]; then
 fi
 OFOGH_ETC="$ETC" python3 /usr/local/lib/ofogheamn-dns/gen-singbox-config.py || true
 
+if [ ! -f "$ETC/wg-server.key" ] && command -v wg >/dev/null 2>&1; then
+  wg genkey > "$ETC/wg-server.key"; chmod 600 "$ETC/wg-server.key"
+  printf 'port=51820\nendpoint=%s\n' "${OFOGH_WG_ENDPOINT:-}" > "$ETC/wg-server.conf"
+  echo "[]" > "$ETC/wg-peers.json"
+  OFOGH_ETC="$ETC" python3 /usr/local/bin/ofogheamn-wg-peer list >/dev/null 2>&1 || true
+  printf '[Interface]\nPrivateKey = %s\nListenPort = 51820\n' "$(cat "$ETC/wg-server.key")" > "$ETC/wg0.conf"
+  chmod 600 "$ETC/wg0.conf"
+fi
+[ -f "$ETC/wg0.conf" ] && bash /opt/ofogheamn/scripts/ofogheamn-wg-setup.sh || true
 /usr/local/bin/smartdns -f -c "$ETC/smartdns.conf" -p /tmp/smartdns.pid &
 /usr/local/bin/sing-box run -c "$ETC/singbox.json" &
 python3 /usr/local/lib/ofogheamn-dns/panel.py &

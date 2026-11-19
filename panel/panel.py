@@ -159,6 +159,14 @@ def proxy_save(users):
     os.chmod(out, 0o600)
 
 
+def _wg_peers():
+    try:
+        with open(os.path.join(ETC, "wg-peers.json"), encoding="utf-8") as fh:
+            return json.load(fh)
+    except Exception:
+        return []
+
+
 def top_domains(n=12):
     path = os.path.join(LOGDIR, "smartdns.log")
     counts = {}
@@ -187,11 +195,15 @@ def status():
     return {
         "dns": svc_state("ofogheamn-dns"),
         "proxy": svc_state("ofogheamn-proxy"),
+        "wg": svc_state("ofogheamn-wg"),
+        "wg_peers": [p.get("name") for p in _wg_peers()],
         "warmup_timer": svc_state("cod-warmup.timer"),
         "mode": mode, "allowlist": allow,
         "smartdns_version": ver,
         "proxy_port": PROXY_PORT, "panel_port": PORT,
         "hijack_count": len(hijack_list()),
+        "blocklist_count": sum(1 for ln in read_lines(os.path.join(ETC, "blocklist.conf"))
+                               if ln.startswith("address /")),
         "cod_count": len(domains_get("cod")), "gaming_count": len(domains_get("gaming")),
         "proxy_users": [u["user"] for u in proxy_users()],
         "top_domains": top_domains(),
@@ -314,6 +326,14 @@ class Handler(BaseHTTPRequestHandler):
             if act == "warmup":
                 ok, out = svc_do("start", "cod-warmup.service")
                 return self._json(200, {"ok": ok, "out": out})
+            if act == "update-blocklist":
+                try:
+                    out = subprocess.run(["update-blocklist"],
+                                         capture_output=True, text=True, timeout=180)
+                    return self._json(200, {"ok": out.returncode == 0,
+                                            "out": (out.stdout + out.stderr)[-800:]})
+                except Exception as exc:
+                    return self._json(200, {"ok": False, "out": str(exc)})
             return self._json(400, {"error": "bad action"})
 
         if path == "/api/hijack":
@@ -367,6 +387,29 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json(400, {"error": f"bad network: {net}"})
             ok, out = mode_set(mode, clean)
             return self._json(200, {"ok": ok, "out": out, "mode": mode, "allowlist": clean})
+
+        if path == "/api/wg":
+            op, name = data.get("op"), str(data.get("name", ""))
+            if not USER_RE.match(name):
+                return self._json(400, {"error": "bad name"})
+            tool = "/usr/local/bin/ofogheamn-wg-peer"
+            try:
+                if op == "add":
+                    out = subprocess.run([tool, "add", name],
+                                         capture_output=True, text=True, timeout=20)
+                    svc_do("restart", "ofogheamn-wg")
+                    return self._json(200, {"ok": out.returncode == 0,
+                                            "config": out.stdout,
+                                            "peers": [p.get("name") for p in _wg_peers()]})
+                if op == "del":
+                    out = subprocess.run([tool, "remove", name],
+                                         capture_output=True, text=True, timeout=20)
+                    svc_do("restart", "ofogheamn-wg")
+                    return self._json(200, {"ok": out.returncode == 0,
+                                            "peers": [p.get("name") for p in _wg_peers()]})
+            except Exception as exc:
+                return self._json(200, {"ok": False, "out": str(exc)})
+            return self._json(400, {"error": "bad op"})
 
         if path == "/api/proxy/users":
             op, user = data.get("op"), str(data.get("user", ""))
@@ -444,6 +487,7 @@ pre{background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:10
     <button data-t="domains">دامنه‌های گیمینگ</button>
     <button data-t="mode">حالت عمومی / خصوصی</button>
     <button data-t="proxy">پروکسی</button>
+    <button data-t="wg">تونل گیمینگ (WireGuard)</button>
     <button data-t="logs">لاگ‌ها</button>
   </nav>
   <p class="msg" id="msg"></p>
@@ -454,6 +498,7 @@ pre{background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:10
       <button class="act" onclick="act('restart-proxy')">ری‌استارت پروکسی</button>
       <button class="act" onclick="act('warmup')">گرم‌کردن کش کالاف</button>
       <button class="act" onclick="act('cod-test')">تست زندهٔ کالاف</button>
+      <button class="act" onclick="act('update-blocklist')">به‌روزرسانی لیست مسدودی</button>
     </div>
     <h3>پرتکرارترین دامنه‌ها (از لاگ)</h3><div id="tops"></div>
     <pre id="out"></pre>
@@ -490,6 +535,13 @@ pre{background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:10
     <p class="sub">پروکسی از نوع Mixed است: HTTP و SOCKS5 روی یک پورت، با UDP برای بازی. در کلاینت‌ها: آدرس سرور + پورت + همین نام کاربری و رمز.</p>
   </section>
 
+  <section id="s-wg">
+    <p class="sub">مسیر کامل: دستگاه ← تونل ← این سرور (DNS + NAT) ← سرور بازی. کانفیگ ساخته‌شده را در اپ WireGuard گوشی/کامپیوتر وارد کن؛ برای کنسول، تونل را روی روتر (OpenWrt/MikroTik) ببند تا کل شبکه از همین مسیر برود.</p>
+    <div class="row"><input id="w-name" placeholder="نام دستگاه، مثل ps5-home"><button class="act" onclick="wgAdd()">ساخت کانفیگ دستگاه</button></div>
+    <table id="w-table"></table>
+    <pre id="w-conf"></pre>
+  </section>
+
   <section id="s-logs">
     <div class="row">
       <button class="ghost" onclick="loadLogs('dns')">لاگ DNS</button>
@@ -515,11 +567,13 @@ async function refresh(){try{const s=await api('/api/status');
   '<div class="card">حالت<b>'+(s.mode==='public'?'عمومی':'خصوصی')+'</b></div>'+
   '<div class="card">قوانین هایجک<b>'+s.hijack_count+'</b></div>'+
   '<div class="card">دامنهٔ کالاف<b>'+s.cod_count+'</b></div>'+
-  '<div class="card">دامنهٔ گیمینگ<b>'+s.gaming_count+'</b></div>';
+  '<div class="card">دامنهٔ گیمینگ<b>'+s.gaming_count+'</b></div>'+
+  '<div class="card">دامنهٔ مسدود<b>'+(s.blocklist_count||0)+'</b></div>';
  $('tops').innerHTML='<table>'+(s.top_domains||[]).map(x=>'<tr><td>'+x[0]+'</td><td>'+x[1]+'</td></tr>').join('')+'</table>';
  $('m-mode').value=s.mode;$('m-allow').value=(s.allowlist||[]).join('\n');
  $('p-info').textContent='کاربران فعلی: '+(s.proxy_users||[]).join('، ');
  $('p-table').innerHTML=(s.proxy_users||[]).map(u=>'<tr><td>'+u+'</td><td><button class="ghost" onclick="proxyDel(\''+u+'\')">حذف</button></td></tr>').join('');
+ $('w-table').innerHTML=(s.wg_peers||[]).map(u=>'<tr><td>'+u+'</td><td><button class="ghost" onclick="wgDel(\''+u+'\')">حذف</button></td></tr>').join('');
  loadHijack();loadDomains();
 }catch(e){}}
 async function act(a){msg('در حال اجرا...');const r=await api('/api/action',{method:'POST',body:JSON.stringify({action:a})});$('out').textContent=r.out||'';msg(r.ok?'انجام شد':'خطا');refresh()}
@@ -533,6 +587,8 @@ $('d-list').addEventListener('change',loadDomains);
 async function modeSave(){const allow=$('m-allow').value.split('\n').map(x=>x.trim()).filter(Boolean);const r=await api('/api/mode',{method:'POST',body:JSON.stringify({mode:$('m-mode').value,allowlist:allow})});msg(r.error||('اعمال شد: '+(r.out||'')));refresh()}
 async function proxyAdd(){const r=await api('/api/proxy/users',{method:'POST',body:JSON.stringify({op:'add',user:$('p-user').value,pass:$('p-pass').value})});msg(r.error||'ذخیره شد');refresh()}
 async function proxyDel(u){await api('/api/proxy/users',{method:'POST',body:JSON.stringify({op:'del',user:u})});refresh()}
+async function wgAdd(){const r=await api('/api/wg',{method:'POST',body:JSON.stringify({op:'add',name:$('w-name').value})});if(r.config)$('w-conf').textContent=r.config;msg(r.error||'ساخته شد');refresh()}
+async function wgDel(n){await api('/api/wg',{method:'POST',body:JSON.stringify({op:'del',name:n})});refresh()}
 async function loadLogs(s){const r=await api('/api/logs?svc='+s);$('logbox').textContent=(r.lines||[]).join('\n')}
 document.querySelectorAll('nav button').forEach(b=>b.addEventListener('click',()=>{
  document.querySelectorAll('nav button').forEach(x=>x.classList.remove('on'));b.classList.add('on');

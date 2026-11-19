@@ -1,0 +1,9 @@
+[Unit]
+Description=Weekly blocklist refresh (opt-in: enable this timer)
+
+[Timer]
+OnCalendar=weekly
+Persistent=true
+
+[Install]
+WantedBy=timers.target

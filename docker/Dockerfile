@@ -6,6 +6,7 @@ ARG SMARTDNS_TAG=Release48.5-RC1
 ARG SINGBOX_TAG=v1.14.4
 RUN apt-get update && apt-get install -y --no-install-recommends \
       curl ca-certificates openssl dnsutils python3 procps \
+      wireguard-tools iproute2 iptables \
     && rm -rf /var/lib/apt/lists/*
 RUN case "$(uname -m)" in x86_64) A=x86_64; SA=amd64 ;; aarch64) A=aarch64; SA=arm64 ;; esac \
     && curl -fsSL -o /usr/local/bin/smartdns \
