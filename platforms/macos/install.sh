@@ -45,6 +45,13 @@ print("config written")
 PYEOF
 fi
 
+# Lite edition: keep the AGH web UI on localhost only (no exposed panel)
+if [ "${OFOGH_LITE:-0}" = "1" ] && [ -f "$DATA/AdGuardHome.yaml" ]; then
+  sudo sed -i '' 's/0.0.0.0:3000/127.0.0.1:3000/' "$DATA/AdGuardHome.yaml" 2>/dev/null || \
+  sed -i 's/0.0.0.0:3000/127.0.0.1:3000/' "$DATA/AdGuardHome.yaml"
+  echo "Lite edition: panel bound to localhost only."
+fi
+
 # ---------- sing-box proxy ----------
 if [ ! -x "$ROOT/sing-box" ]; then
   echo "Downloading sing-box $SINGBOX_VER ..."
@@ -81,5 +88,5 @@ sudo launchctl load -w /Library/LaunchDaemons/ir.ofogheamn.proxy.plist 2>/dev/nu
 echo ""
 echo "DONE. Ofogheamn DNS node is running on this Mac."
 echo " DNS (this Mac's IP): port 53 (UDP/TCP), DoT 853"
-echo " AdGuard Home panel:  http://localhost:3000  (first visit: create the admin user)"
+if [ "${OFOGH_LITE:-0}" = "1" ]; then echo " LITE edition: no exposed panel - AGH UI on localhost:3000 only."; else echo " AdGuard Home panel:  http://localhost:3000  (first visit: create the admin user)"; fi
 echo " Proxy:               <this Mac IP>:2080  user ofogh (password in $DATA/proxy.json)"

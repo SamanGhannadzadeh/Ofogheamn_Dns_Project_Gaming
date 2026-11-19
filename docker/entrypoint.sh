@@ -18,7 +18,9 @@ if [ ! -s "$ETC/tls/fullchain.pem" ]; then
     -subj "/CN=$HOSTNAME_DNS" -addext "subjectAltName=DNS:$HOSTNAME_DNS" >/dev/null 2>&1
   chmod 600 "$ETC/tls/privkey.pem"
 fi
-if [ ! -f "$ETC/panel.conf" ]; then
+if [ "${OFOGH_LITE:-0}" = "1" ]; then
+  echo "*** LITE edition: no web panel (CLI/config management only)"
+elif [ ! -f "$ETC/panel.conf" ]; then
   PANEL_PASS="${OFOGH_PANEL_PASSWORD:-$(openssl rand -hex 8)}"
   HASH="$(printf %s "$PANEL_PASS" | sha256sum | cut -d' ' -f1)"
   printf 'port=8080\nbind=0.0.0.0\npassword_hash=%s\n' "$HASH" > "$ETC/panel.conf"
@@ -46,7 +48,7 @@ fi
 [ -f "$ETC/wg0.conf" ] && bash /opt/ofogheamn/scripts/ofogheamn-wg-setup.sh || true
 /usr/local/bin/smartdns -f -c "$ETC/smartdns.conf" -p /tmp/smartdns.pid &
 /usr/local/bin/sing-box run -c "$ETC/singbox.json" &
-python3 /usr/local/lib/ofogheamn-dns/panel.py &
+[ "${OFOGH_LITE:-0}" = "1" ] || python3 /usr/local/lib/ofogheamn-dns/panel.py &
 # CoD/gaming cache warmer loop (replaces the systemd timer)
 ( while true; do sleep 240; bash /opt/ofogheamn/scripts/cod-warmup.sh || true; done ) &
 wait -n

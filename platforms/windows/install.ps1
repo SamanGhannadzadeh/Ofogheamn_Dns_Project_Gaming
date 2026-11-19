@@ -2,6 +2,7 @@
 # Core: AdGuard Home (native Windows build) + sing-box proxy.
 # Run in an ELEVATED PowerShell from the repo's platforms\windows.
 #Requires -RunAsAdministrator
+param([switch]$Lite)   # Lite: no exposed panel (AGH UI stays on localhost), CLI/config management
 $ErrorActionPreference = "Stop"
 
 $AGH_VER = "v0.107.80"
@@ -35,6 +36,7 @@ if (Test-Path $hijack) {
 }
 if (-not $rewrites) { $rewrites = "    []`n" }
 $tpl = $tpl -replace "__REWRITES__", $rewrites.TrimEnd()
+if ($Lite) { $tpl = $tpl -replace "0\.0\.0\.0:3000", "127.0.0.1:3000" }
 if (-not (Test-Path "$Data\AdGuardHome.yaml")) {
     Set-Content "$Data\AdGuardHome.yaml" $tpl -Encoding UTF8
 }
@@ -61,6 +63,7 @@ foreach ($r in @(
     @("Ofogh DNS UDP", 53, "UDP"), @("Ofogh DNS TCP", 53, "TCP"),
     @("Ofogh DoT", 853, "TCP"), @("Ofogh Proxy", 2080, "TCP"),
     @("Ofogh AGH Panel", 3000, "TCP"), @("Ofogh Mesh Report", 51821, "TCP"))) {
+    if ($Lite -and $r[0] -eq "Ofogh AGH Panel") { continue }
     if (-not (Get-NetFirewallRule -DisplayName $r[0] -ErrorAction SilentlyContinue)) {
         New-NetFirewallRule -DisplayName $r[0] -Direction Inbound -Protocol $r[2] -LocalPort $r[1] -Action Allow | Out-Null
     }
@@ -79,6 +82,7 @@ Start-ScheduledTask -TaskName "OfogheamnProxy"
 Write-Host ""
 Write-Host "DONE. Ofogheamn DNS node is running on this Windows machine." -ForegroundColor Green
 Write-Host " DNS (this server's IP): port 53 (UDP/TCP), DoT 853"
-Write-Host " AdGuard Home panel:     http://localhost:3000  (first visit: create the admin user)"
+if ($Lite) { Write-Host " LITE edition: no exposed panel - AGH UI is bound to localhost:3000 on this machine only." }
+else { Write-Host " AdGuard Home panel:     http://localhost:3000  (first visit: create the admin user)" }
 Write-Host " Proxy:                  <this server IP>:2080  user: ofogh  password: $proxyPass"
 Write-Host " WireGuard: install the official WireGuard app to import client configs from your nodes."

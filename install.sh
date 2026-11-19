@@ -12,6 +12,9 @@ set -euo pipefail
 
 REPO_URL="https://github.com/saman-ghannadzadeh/Ofogheamn_Dns_Project_Gaming"
 HOSTNAME_DNS="${OFOGH_DNS_HOSTNAME:-dns.ofogheamn.ir}"
+# Lite edition (no web panel):  sudo bash install.sh --lite   or   OFOGH_LITE=1
+LITE="${OFOGH_LITE:-0}"
+[ "${1:-}" = "--lite" ] && LITE=1
 ETC=/etc/ofogheamn-dns
 SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || echo .)"
 
@@ -66,7 +69,7 @@ install -m 755 "$SRC_DIR/scripts/cod-warmup.sh" /usr/local/bin/cod-warmup
 install -m 755 "$SRC_DIR/scripts/ofogheamn-firewall.sh" /usr/local/bin/ofogheamn-firewall
 install -m 755 "$SRC_DIR/scripts/update-blocklist.sh" /usr/local/bin/update-blocklist
 mkdir -p /usr/local/lib/ofogheamn-dns
-install -m 644 "$SRC_DIR/panel/panel.py" /usr/local/lib/ofogheamn-dns/panel.py
+[ "$LITE" != "1" ] && install -m 644 "$SRC_DIR/panel/panel.py" /usr/local/lib/ofogheamn-dns/panel.py || true
 install -m 755 "$SRC_DIR/scripts/gen-singbox-config.py" /usr/local/lib/ofogheamn-dns/gen-singbox-config.py
 
 # ---------- proxy core (sing-box, newest release) ----------
@@ -104,7 +107,9 @@ fi
 
 # ---------- panel + mode + proxy credentials (first run only) ----------
 PANEL_PASS=""
-if [ ! -f "$ETC/panel.conf" ]; then
+if [ "$LITE" = "1" ]; then
+  say "Lite edition: skipping the web panel (CLI-only management)"
+elif [ ! -f "$ETC/panel.conf" ]; then
   PANEL_PASS="$(openssl rand -hex 8)"
   HASH="$(printf %s "$PANEL_PASS" | sha256sum | cut -d' ' -f1)"
   printf 'port=8080\nbind=0.0.0.0\npassword_hash=%s\n' "$HASH" > "$ETC/panel.conf"
@@ -152,7 +157,7 @@ touch /etc/ofogheamn-dns/mesh-upstream.conf
 systemctl daemon-reload
 systemctl enable ofogheamn-dns >/dev/null 2>&1 || true
 systemctl enable --now cod-warmup.timer >/dev/null 2>&1 || true
-systemctl enable --now ofogheamn-panel >/dev/null 2>&1 || true
+[ "$LITE" != "1" ] && systemctl enable --now ofogheamn-panel >/dev/null 2>&1 || true
 [ -x /usr/local/bin/sing-box ] && systemctl enable --now ofogheamn-proxy >/dev/null 2>&1 || true
 [ -f "$ETC/wg0.conf" ] && systemctl enable --now ofogheamn-wg >/dev/null 2>&1 || true
 if ! systemctl restart ofogheamn-dns; then
@@ -175,6 +180,7 @@ dig +short +time=3 +tries=1 @127.0.0.1 callofduty.com A | head -3 || true
 dig +short +time=3 +tries=1 @127.0.0.1 store.steampowered.com A | head -3 || true
 
 PUBIP="$(curl -s --max-time 5 https://ifconfig.me || hostname -I | awk '{print $1}')"
+if [ "$LITE" = "1" ]; then PANEL_LINE="(Lite — no web panel; manage with the ofogheamn-dns CLI)"; else PANEL_LINE="http://$PUBIP:8080"; fi
 cat <<EOF
 
 ============================================================
@@ -184,7 +190,7 @@ cat <<EOF
    DoH       : https://$HOSTNAME_DNS/dns-query
    DoQ       : $HOSTNAME_DNS : 853 (UDP)
  Proxy    : $PUBIP : 2080 (mixed HTTP/SOCKS5 + UDP, auth required)
- Panel    : http://$PUBIP:8080
+ Panel    : $PANEL_LINE
  Manage:  ofogheamn-dns            (interactive menu)
           ofogheamn-dns status|mode|proxy|cod-test|...
  Logs:    /var/log/ofogheamn-dns/smartdns.log

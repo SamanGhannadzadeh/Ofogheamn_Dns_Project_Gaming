@@ -167,6 +167,50 @@ def _wg_peers():
         return []
 
 
+MESH_CONF = os.path.join(ETC, "mesh.json")
+MESH_STATE = "/run/ofogheamn-mesh-state.json"
+
+
+def mesh_get():
+    try:
+        with open(MESH_CONF, encoding="utf-8") as fh:
+            c = json.load(fh)
+    except Exception:
+        c = {}
+    c.setdefault("enabled", False)
+    c.setdefault("peers", [])
+    c.setdefault("key", "")
+    st = {}
+    try:
+        with open(MESH_STATE, encoding="utf-8") as fh:
+            st = json.load(fh)
+    except Exception:
+        pass
+    return {
+        "enabled": bool(c["enabled"]),
+        "key": c.get("key", ""),
+        "mesh_ip": c.get("mesh_ip", ""),
+        "port": c.get("port", 51821),
+        "wg_port": c.get("wg_port", 51822),
+        "peers": c["peers"],
+        "service": svc_state("ofogheamn-mesh"),
+        "state": st,
+    }
+
+
+def mesh_save(c):
+    with open(MESH_CONF, "w", encoding="utf-8") as fh:
+        json.dump(c, fh, indent=1)
+
+
+def mesh_load_raw():
+    try:
+        with open(MESH_CONF, encoding="utf-8") as fh:
+            return json.load(fh)
+    except Exception:
+        return {}
+
+
 def top_domains(n=12):
     path = os.path.join(LOGDIR, "smartdns.log")
     counts = {}
@@ -207,6 +251,9 @@ def status():
         "cod_count": len(domains_get("cod")), "gaming_count": len(domains_get("gaming")),
         "proxy_users": [u["user"] for u in proxy_users()],
         "top_domains": top_domains(),
+        "mesh_enabled": mesh_get()["enabled"],
+        "mesh_best": (mesh_get()["state"] or {}).get("best", ""),
+        "mesh_service": svc_state("ofogheamn-mesh"),
     }
 
 
@@ -273,6 +320,8 @@ class Handler(BaseHTTPRequestHandler):
             fn = "smartdns.log" if svc == "dns" else "singbox.log"
             lines = read_lines(os.path.join(LOGDIR, fn))[-120:]
             return self._json(200, {"lines": lines})
+        if path == "/api/mesh":
+            return self._json(200, mesh_get())
         return self._json(404, {"error": "not found"})
 
     def do_POST(self):
@@ -334,7 +383,78 @@ class Handler(BaseHTTPRequestHandler):
                                             "out": (out.stdout + out.stderr)[-800:]})
                 except Exception as exc:
                     return self._json(200, {"ok": False, "out": str(exc)})
+            if act == "apply-firewall":
+                try:
+                    out = subprocess.run(["ofogheamn-firewall"],
+                                         capture_output=True, text=True, timeout=60)
+                    return self._json(200, {"ok": out.returncode == 0,
+                                            "out": (out.stdout + out.stderr)[-800:]})
+                except Exception as exc:
+                    return self._json(200, {"ok": False, "out": str(exc)})
             return self._json(400, {"error": "bad action"})
+
+        if path == "/api/mesh":
+            op = data.get("op")
+            c = mesh_load_raw()
+            c.setdefault("enabled", False)
+            c.setdefault("peers", [])
+            c.setdefault("port", 51821)
+            c.setdefault("wg_port", 51822)
+            if op == "on":
+                if not c.get("key"):
+                    c["key"] = secrets.token_hex(16)
+                if not c.get("mesh_ip"):
+                    c["mesh_ip"] = "10.99.0.1"
+                c["enabled"] = True
+                mesh_save(c)
+                svc_do("enable", "ofogheamn-mesh")
+                ok, out = svc_do("start", "ofogheamn-mesh")
+                return self._json(200, {"ok": ok, "out": out, "mesh": mesh_get()})
+            if op == "off":
+                c["enabled"] = False
+                mesh_save(c)
+                svc_do("stop", "ofogheamn-mesh")
+                ok, out = svc_do("disable", "ofogheamn-mesh")
+                return self._json(200, {"ok": ok, "out": out, "mesh": mesh_get()})
+            if op == "key":
+                key = str(data.get("key", "")).strip()
+                if len(key) < 8:
+                    return self._json(400, {"error": "key too short (min 8)"})
+                c["key"] = key
+                mesh_save(c)
+                if c["enabled"]:
+                    svc_do("restart", "ofogheamn-mesh")
+                return self._json(200, {"ok": True, "mesh": mesh_get()})
+            if op == "add-peer":
+                name = str(data.get("name", ""))
+                endpoint = str(data.get("endpoint", "")).strip()
+                pubkey = str(data.get("pubkey", "")).strip()
+                mip = str(data.get("mesh_ip", "")).strip()
+                if not USER_RE.match(name):
+                    return self._json(400, {"error": "bad name"})
+                if not re.match(r"^[A-Za-z0-9.-]+:\d{2,5}$", endpoint):
+                    return self._json(400, {"error": "endpoint must be host:port"})
+                if not re.match(r"^[A-Za-z0-9+/]{43}=$", pubkey):
+                    return self._json(400, {"error": "bad wireguard public key"})
+                try:
+                    ipaddress.ip_address(mip)
+                except ValueError:
+                    return self._json(400, {"error": "bad mesh ip"})
+                c["peers"] = [p for p in c["peers"] if p.get("name") != name]
+                c["peers"].append({"name": name, "endpoint": endpoint,
+                                   "pubkey": pubkey, "mesh_ip": mip})
+                mesh_save(c)
+                if c["enabled"]:
+                    svc_do("restart", "ofogheamn-mesh")
+                return self._json(200, {"ok": True, "mesh": mesh_get()})
+            if op == "del-peer":
+                name = str(data.get("name", ""))
+                c["peers"] = [p for p in c["peers"] if p.get("name") != name]
+                mesh_save(c)
+                if c["enabled"]:
+                    svc_do("restart", "ofogheamn-mesh")
+                return self._json(200, {"ok": True, "mesh": mesh_get()})
+            return self._json(400, {"error": "bad op"})
 
         if path == "/api/hijack":
             dom, tgt = str(data.get("domain", "")).lower(), str(data.get("target", ""))
@@ -488,6 +608,7 @@ pre{background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:10
     <button data-t="mode">حالت عمومی / خصوصی</button>
     <button data-t="proxy">پروکسی</button>
     <button data-t="wg">تونل گیمینگ (WireGuard)</button>
+    <button data-t="mesh">مش (اتصال نودها)</button>
     <button data-t="logs">لاگ‌ها</button>
   </nav>
   <p class="msg" id="msg"></p>
@@ -499,6 +620,7 @@ pre{background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:10
       <button class="act" onclick="act('warmup')">گرم‌کردن کش کالاف</button>
       <button class="act" onclick="act('cod-test')">تست زندهٔ کالاف</button>
       <button class="act" onclick="act('update-blocklist')">به‌روزرسانی لیست مسدودی</button>
+      <button class="act" onclick="act('apply-firewall')">اعمال دوبارهٔ فایروال</button>
     </div>
     <h3>پرتکرارترین دامنه‌ها (از لاگ)</h3><div id="tops"></div>
     <pre id="out"></pre>
@@ -542,6 +664,24 @@ pre{background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:10
     <pre id="w-conf"></pre>
   </section>
 
+  <section id="s-mesh">
+    <p class="sub">مش یعنی اتصال نودها به هم: هر نود پینگ خودش تا سرورهای بازی و تا همتاهایش را اندازه می‌گیرد؛ اگر جمعِ «من ← همتا» + «همتا ← بازی» از مسیر مستقیم کمتر بود، خروجی از همان همتا می‌رود. فقط به نودی وصل می‌شود که او هم مش را روشن کرده باشد.</p>
+    <p id="mesh-info"></p>
+    <div class="row">
+      <button class="act" onclick="meshSet('on')">روشن‌کردن مش</button>
+      <button class="ghost" onclick="meshSet('off')">خاموش‌کردن مش</button>
+    </div>
+    <label>کلید مشترک مش (باید روی همهٔ همتاها یکی باشد)</label>
+    <div class="row"><input id="mesh-key" dir="ltr"><button class="act" onclick="meshKey()">ذخیرهٔ کلید</button></div>
+    <h3>همتاها</h3>
+    <div class="row"><input id="mp-name" placeholder="نام، مثل frankfurt2"><input id="mp-endpoint" placeholder="host:51822" dir="ltr"></div>
+    <div class="row"><input id="mp-pub" placeholder="کلید عمومی WireGuard همتا" dir="ltr"><input id="mp-ip" placeholder="10.99.0.2" dir="ltr"></div>
+    <button class="act" onclick="meshPeerAdd()">افزودن همتا</button>
+    <table id="mesh-table"></table>
+    <h3>نمرهٔ مسیرها (میلی‌ثانیه — کمتر بهتر)</h3>
+    <div id="mesh-scores"></div>
+  </section>
+
   <section id="s-logs">
     <div class="row">
       <button class="ghost" onclick="loadLogs('dns')">لاگ DNS</button>
@@ -568,14 +708,26 @@ async function refresh(){try{const s=await api('/api/status');
   '<div class="card">قوانین هایجک<b>'+s.hijack_count+'</b></div>'+
   '<div class="card">دامنهٔ کالاف<b>'+s.cod_count+'</b></div>'+
   '<div class="card">دامنهٔ گیمینگ<b>'+s.gaming_count+'</b></div>'+
-  '<div class="card">دامنهٔ مسدود<b>'+(s.blocklist_count||0)+'</b></div>';
+  '<div class="card">دامنهٔ مسدود<b>'+(s.blocklist_count||0)+'</b></div>'+
+  '<div class="card">مش<b>'+(s.mesh_enabled?('روشن — خروجی: '+(s.mesh_best||'…')):'خاموش')+'</b></div>';
  $('tops').innerHTML='<table>'+(s.top_domains||[]).map(x=>'<tr><td>'+x[0]+'</td><td>'+x[1]+'</td></tr>').join('')+'</table>';
  $('m-mode').value=s.mode;$('m-allow').value=(s.allowlist||[]).join('\n');
  $('p-info').textContent='کاربران فعلی: '+(s.proxy_users||[]).join('، ');
  $('p-table').innerHTML=(s.proxy_users||[]).map(u=>'<tr><td>'+u+'</td><td><button class="ghost" onclick="proxyDel(\''+u+'\')">حذف</button></td></tr>').join('');
  $('w-table').innerHTML=(s.wg_peers||[]).map(u=>'<tr><td>'+u+'</td><td><button class="ghost" onclick="wgDel(\''+u+'\')">حذف</button></td></tr>').join('');
- loadHijack();loadDomains();
+ loadHijack();loadDomains();loadMesh();
 }catch(e){}}
+async function loadMesh(){try{const m=await api('/api/mesh');
+ $('mesh-info').textContent='وضعیت: '+(m.enabled?'روشن':'خاموش')+' — سرویس: '+m.service+' — خروجی فعلی: '+((m.state&&m.state.best)||'—')+' — IP مش این نود: '+(m.mesh_ip||'—');
+ if(document.activeElement!==$('mesh-key'))$('mesh-key').value=m.key||'';
+ $('mesh-table').innerHTML=(m.peers||[]).map(p=>'<tr><td>'+p.name+'</td><td dir="ltr">'+p.endpoint+'</td><td dir="ltr">'+p.mesh_ip+'</td><td><button class="ghost" onclick="meshPeerDel(\''+p.name+'\')">حذف</button></td></tr>').join('');
+ const sc=(m.state&&m.state.scores)||{};
+ $('mesh-scores').innerHTML='<table>'+Object.keys(sc).map(k=>'<tr><td>'+(k==='direct'?'مستقیم':k)+'</td><td>'+sc[k]+'</td></tr>').join('')+'</table>';
+}catch(e){}}
+async function meshSet(op){const r=await api('/api/mesh',{method:'POST',body:JSON.stringify({op:op})});msg(r.error||(op==='on'?'مش روشن شد':'مش خاموش شد'));refresh()}
+async function meshKey(){const r=await api('/api/mesh',{method:'POST',body:JSON.stringify({op:'key',key:$('mesh-key').value})});msg(r.error||'کلید ذخیره شد');refresh()}
+async function meshPeerAdd(){const r=await api('/api/mesh',{method:'POST',body:JSON.stringify({op:'add-peer',name:$('mp-name').value,endpoint:$('mp-endpoint').value,pubkey:$('mp-pub').value,mesh_ip:$('mp-ip').value})});msg(r.error||'همتا افزوده شد');refresh()}
+async function meshPeerDel(n){await api('/api/mesh',{method:'POST',body:JSON.stringify({op:'del-peer',name:n})});refresh()}
 async function act(a){msg('در حال اجرا...');const r=await api('/api/action',{method:'POST',body:JSON.stringify({action:a})});$('out').textContent=r.out||'';msg(r.ok?'انجام شد':'خطا');refresh()}
 async function loadHijack(){const r=await api('/api/hijack');$('h-table').innerHTML=r.rules.map(x=>'<tr><td>'+x.domain+'</td><td>'+x.target+'</td><td><button class="ghost" onclick="hijackDel(\''+x.domain+'\')">حذف</button></td></tr>').join('')}
 async function hijackAdd(){const r=await api('/api/hijack',{method:'POST',body:JSON.stringify({domain:$('h-dom').value,target:$('h-tgt').value})});msg(r.error||'ذخیره شد');loadHijack();refresh()}
