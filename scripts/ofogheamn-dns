@@ -148,6 +148,55 @@ PY
       restart) need_root; systemctl restart ofogheamn-wg && echo ok ;;
       *) echo "usage: ofogheamn-dns wg status|add-peer <name>|peers|del-peer <name>|restart" ;;
     esac ;;
+  mesh)
+    shift
+    MCONF="$ETC/mesh.json"
+    mesh_py() { python3 - "$@" <<'PYEOF'
+import json, sys, os
+p = "/etc/ofogheamn-dns/mesh.json"
+try: c = json.load(open(p))
+except Exception: c = {}
+c.setdefault("enabled", False); c.setdefault("peers", [])
+c.setdefault("port", 51821); c.setdefault("wg_port", 51822)
+cmd = sys.argv[1]
+if cmd == "init":
+    import secrets
+    if not c.get("key"): c["key"] = secrets.token_hex(16)
+    if not c.get("mesh_ip"): c["mesh_ip"] = "10.99.0.1"
+    json.dump(c, open(p, "w"), indent=1); print("mesh key:", c["key"])
+elif cmd == "on": c["enabled"] = True; json.dump(c, open(p, "w"), indent=1); print("mesh ON")
+elif cmd == "off": c["enabled"] = False; json.dump(c, open(p, "w"), indent=1); print("mesh OFF")
+elif cmd == "key":
+    if len(sys.argv) > 2: c["key"] = sys.argv[2]; json.dump(c, open(p, "w"), indent=1)
+    print("mesh key:", c.get("key", ""))
+elif cmd == "add-peer":
+    name, ep, pub, ip = sys.argv[2:6]
+    c["peers"] = [x for x in c["peers"] if x["name"] != name]
+    c["peers"].append({"name": name, "endpoint": ep, "pubkey": pub, "mesh_ip": ip})
+    json.dump(c, open(p, "w"), indent=1); print("peer added:", name)
+elif cmd == "del-peer":
+    c["peers"] = [x for x in c["peers"] if x["name"] != sys.argv[2]]
+    json.dump(c, open(p, "w"), indent=1); print("peer removed:", sys.argv[2])
+elif cmd == "peers":
+    for x in c["peers"]: print(" %s  %s  %s" % (x["name"], x["endpoint"], x["mesh_ip"]))
+    if not c["peers"]: print(" (no peers)")
+elif cmd == "status":
+    print("mesh:", "ON" if c["enabled"] else "OFF", " peers:", len(c["peers"]))
+    try: print(open("/run/ofogheamn-mesh-state.json").read())
+    except Exception: print(" (agent has not reported yet)")
+PYEOF
+    }
+    case "${1:-status}" in
+      on) need_root; [ -f "$MCONF" ] || mesh_py init >/dev/null; mesh_py on; systemctl enable --now ofogheamn-mesh && echo "${G}mesh agent running${N}" ;;
+      off) need_root; mesh_py off; systemctl disable --now ofogheamn-mesh; echo ok ;;
+      init) need_root; mesh_py init ;;
+      key) mesh_py key "$2" ;;
+      add-peer) need_root; mesh_py add-peer "$2" "$3" "$4" "$5"; systemctl restart ofogheamn-mesh 2>/dev/null; echo ok ;;
+      del-peer) need_root; mesh_py del-peer "$2"; systemctl restart ofogheamn-mesh 2>/dev/null; echo ok ;;
+      peers) mesh_py peers ;;
+      status) mesh_py status ;;
+      *) echo "usage: ofogheamn-dns mesh on|off|status|init|key [value]|add-peer <name> <host:wgport> <pubkey> <mesh-ip>|del-peer <name>|peers" ;;
+    esac ;;
   restart) need_root; reload_dns ;;
   start) need_root; systemctl start "$SVC" ;;
   stop) need_root; systemctl stop "$SVC" ;;

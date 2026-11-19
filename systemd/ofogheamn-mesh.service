@@ -1,0 +1,13 @@
+[Unit]
+Description=Ofogheamn Mesh — lowest-total-ping peering between nodes
+After=network-online.target ofogheamn-dns.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/ofogheamn-mesh.py
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -84,6 +84,7 @@ fi
 # ---------- gaming tunnel (WireGuard) ----------
 install -m 755 "$SRC_DIR/scripts/ofogheamn-wg-setup.sh" /usr/local/bin/ofogheamn-wg-setup
 install -m 755 "$SRC_DIR/scripts/ofogheamn-wg-peer.py" /usr/local/bin/ofogheamn-wg-peer
+install -m 755 "$SRC_DIR/scripts/ofogheamn-mesh.py" /usr/local/bin/ofogheamn-mesh.py
 if ! command -v wg >/dev/null 2>&1; then
   say "installing wireguard-tools"
   apt-get update -qq >/dev/null 2>&1 || true
@@ -144,6 +145,10 @@ cp "$SRC_DIR/systemd/ofogheamn-wg.service" /etc/systemd/system/ofogheamn-wg.serv
 cp "$SRC_DIR/systemd/ofogheamn-blocklist.service" /etc/systemd/system/ofogheamn-blocklist.service
 cp "$SRC_DIR/systemd/ofogheamn-blocklist.timer" /etc/systemd/system/ofogheamn-blocklist.timer
 cp "$SRC_DIR/systemd/ofogheamn-proxy.service" /etc/systemd/system/ofogheamn-proxy.service
+cp "$SRC_DIR/systemd/ofogheamn-mesh.service" /etc/systemd/system/ofogheamn-mesh.service
+# Mesh is OPT-IN: installed but never enabled by the installer.
+# The owner turns it on with: ofogheamn-dns mesh on
+touch /etc/ofogheamn-dns/mesh-upstream.conf
 systemctl daemon-reload
 systemctl enable ofogheamn-dns >/dev/null 2>&1 || true
 systemctl enable --now cod-warmup.timer >/dev/null 2>&1 || true
