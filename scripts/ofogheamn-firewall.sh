@@ -47,3 +47,14 @@ if [ "$MODE" = "private" ]; then
 else
   echo "mode=public applied (open resolver)"
 fi
+
+# MSS clamping for tunnel traffic (research 2026-11-19): peers behind
+# PPPoE/mobile paths announce MSS values the tunnel cannot carry;
+# clamping TCP MSS to the path MTU on wg0 forwarding stops silent
+# fragmentation stalls. Idempotent; UDP (game traffic) is untouched.
+for dir in -i -o; do
+  iptables -t mangle -C FORWARD $dir wg0 -p tcp --tcp-flags SYN,RST SYN \
+    -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null \
+    || iptables -t mangle -A FORWARD $dir wg0 -p tcp --tcp-flags SYN,RST SYN \
+         -j TCPMSS --clamp-mss-to-pmtu
+done

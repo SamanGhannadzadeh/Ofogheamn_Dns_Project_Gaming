@@ -84,6 +84,10 @@ def client_config(peer, server_pub):
 PrivateKey = {peer['privkey']}
 Address = {peer['ip']}/32
 DNS = 10.66.0.1
+# MTU hygiene (research 2026-11-19): 1380 is safe for PPPoE home
+# lines; on mobile data or double-encapsulated paths drop to 1280.
+# A too-large MTU silently fragments game UDP and adds jitter.
+MTU = 1380
 
 [Peer]
 PublicKey = {server_pub}

@@ -1,0 +1,30 @@
+# =====================================================================
+# OPTIONAL: split-ECS blueprint (ships DISABLED — do not just include)
+# =====================================================================
+# Project default (Saman's core-model decision): ECS is OFF. Upstreams
+# geolocate by the NODE's IP, which is exactly the foreign-node model:
+# game/CDN edges are picked for the node's location, where the tunnel
+# actually exits.
+#
+# The split-ECS idea from the 2026 research is narrower: for pure
+# matchmaking/CDN domains it can help to show the upstream the
+# PLAYER's /24 instead, while sanction-bypass domains keep resolving
+# by the node's location. Expected gain is small and title-dependent;
+# that is why this is a blueprint, not a default.
+#
+# To experiment (on a real node, never blind):
+#   1. Create a second upstream group whose servers carry your
+#      SmartDNS build's client-subnet option, e.g.:
+#        server-tls 1.1.1.1 -group edge -exclude-default-group
+#        server-https https://cloudflare-dns.com/dns-query -group edge -exclude-default-group
+#      and enable ECS forwarding per your build's documentation
+#      (`smartdns -h` / the release notes of YOUR version — the exact
+#      flag differs between releases; verify before deploying).
+#   2. Route ONLY matchmaking/CDN domain-sets to it:
+#        nameserver /domain-set:cod/edge
+#      (keep the gaming set and everything else on the default
+#      node-located path).
+#   3. Measure with `ofogheamn-dns region` + in-game ping before and
+#      after. If the median does not improve for YOUR ISP/title,
+#      revert — ECS also leaks the player's subnet to upstreams.
+# =====================================================================

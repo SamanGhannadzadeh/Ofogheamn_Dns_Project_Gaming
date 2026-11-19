@@ -42,6 +42,33 @@ if [ ! -f "$SRC_DIR/config/smartdns.conf" ]; then
   SRC_DIR="$TMP"
 fi
 
+# ---------- download integrity ----------
+# Every binary we fetch is checked against the SHA-256 digest that
+# GitHub itself records for that release asset. A mismatch aborts
+# the install. If the API is unreachable we warn loudly and continue
+# (availability), but a *known* bad digest never installs.
+verify_digest() { # repo tag asset file
+  local want got
+  want="$(curl -fsSL --max-time 30 "https://api.github.com/repos/$1/releases/tags/$2" 2>/dev/null \
+    | python3 -c 'import json,sys
+try:
+    d = json.load(sys.stdin)
+    a = [x for x in d.get("assets", []) if x["name"] == sys.argv[1]]
+    print((a[0].get("digest") or "").replace("sha256:", "") if a else "")
+except Exception:
+    print("")' "$3" 2>/dev/null)"
+  if [ -z "$want" ]; then
+    echo "WARNING: could not fetch the official digest for $3; installing unverified"
+    return 0
+  fi
+  got="$(sha256sum "$4" | awk '{print $1}')"
+  if [ "$got" != "$want" ]; then
+    echo "SECURITY ABORT: sha256 mismatch for $3 (got $got, want $want)" >&2
+    exit 1
+  fi
+  echo "digest verified: $3"
+}
+
 # ---------- SmartDNS binary (newest release) ----------
 TAG="${SMARTDNS_VERSION:-}"
 if [ -z "$TAG" ]; then
@@ -49,9 +76,11 @@ if [ -z "$TAG" ]; then
   [ -n "$TAG" ] || TAG="Release48.5-RC1"
 fi
 say "installing SmartDNS $TAG ($SD_ARCH)"
-curl -fsSL -o /usr/local/bin/smartdns \
+curl -fsSL -o /tmp/smartdns-bin \
   "https://github.com/pymumu/smartdns/releases/download/$TAG/smartdns-$SD_ARCH"
-chmod 755 /usr/local/bin/smartdns
+verify_digest "pymumu/smartdns" "$TAG" "smartdns-$SD_ARCH" /tmp/smartdns-bin
+install -m 755 /tmp/smartdns-bin /usr/local/bin/smartdns
+rm -f /tmp/smartdns-bin
 /usr/local/bin/smartdns -v || true
 
 # ---------- user, dirs, config ----------
@@ -77,8 +106,11 @@ SB_TAG="$(curl -sIL -o /dev/null -w '%{url_effective}' https://github.com/SagerN
 case "$(uname -m)" in x86_64) SB_ARCH=amd64 ;; aarch64|arm64) SB_ARCH=arm64 ;; esac
 if [ -n "${SB_TAG:-}" ]; then
   say "installing sing-box $SB_TAG (proxy core)"
-  curl -fsSL "https://github.com/SagerNet/sing-box/releases/download/$SB_TAG/sing-box-${SB_TAG#v}-linux-$SB_ARCH.tar.gz" \
-    | tar -xz -C /tmp
+  curl -fsSL -o /tmp/sing-box.tar.gz \
+    "https://github.com/SagerNet/sing-box/releases/download/$SB_TAG/sing-box-${SB_TAG#v}-linux-$SB_ARCH.tar.gz"
+  verify_digest "SagerNet/sing-box" "$SB_TAG" "sing-box-${SB_TAG#v}-linux-$SB_ARCH.tar.gz" /tmp/sing-box.tar.gz
+  tar -xzf /tmp/sing-box.tar.gz -C /tmp
+  rm -f /tmp/sing-box.tar.gz
   install -m 755 "/tmp/sing-box-${SB_TAG#v}-linux-$SB_ARCH/sing-box" /usr/local/bin/sing-box
 else
   echo "WARNING: sing-box download failed; proxy will be unavailable until 'ofogheamn-dns update' succeeds"
@@ -88,6 +120,8 @@ fi
 install -m 755 "$SRC_DIR/scripts/ofogheamn-wg-setup.sh" /usr/local/bin/ofogheamn-wg-setup
 install -m 755 "$SRC_DIR/scripts/ofogheamn-wg-peer.py" /usr/local/bin/ofogheamn-wg-peer
 install -m 755 "$SRC_DIR/scripts/ofogheamn-mesh.py" /usr/local/bin/ofogheamn-mesh.py
+install -m 755 "$SRC_DIR/scripts/ofogheamn-region.py" /usr/local/bin/ofogheamn-region.py
+install -m 755 "$SRC_DIR/scripts/ofogheamn-bench.py" /usr/local/bin/ofogheamn-bench.py
 if ! command -v wg >/dev/null 2>&1; then
   say "installing wireguard-tools"
   apt-get update -qq >/dev/null 2>&1 || true
