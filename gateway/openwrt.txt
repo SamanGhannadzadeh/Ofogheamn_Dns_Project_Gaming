@@ -1,0 +1,35 @@
+OpenWrt — force LAN DNS through the Ofogheamn DNS server
+=========================================================
+Replace 192.168.1.2 with the DNS server IP.
+
+/etc/config/firewall — add two redirects and one rule:
+
+config redirect
+	option name 'Ofogheamn-DNS-UDP'
+	option src 'lan'
+	option proto 'udp'
+	option src_dport '53'
+	option dest_ip '192.168.1.2'
+	option dest_port '53'
+	option target 'DNAT'
+
+config redirect
+	option name 'Ofogheamn-DNS-TCP'
+	option src 'lan'
+	option proto 'tcp'
+	option src_dport '53'
+	option dest_ip '192.168.1.2'
+	option dest_port '53'
+	option target 'DNAT'
+
+config rule
+	option name 'Block-DoT-DoQ-bypass'
+	option src 'lan'
+	option dest 'wan'
+	option proto 'tcp udp'
+	option dest_port '853'
+	option target 'REJECT'
+
+Then:  /etc/init.d/firewall restart
+Also set DHCP option 6 to the DNS server so well-behaved clients
+use it directly:  uci add_list dhcp.lan.dhcp_option='6,192.168.1.2'

@@ -1,0 +1,33 @@
+# Ofogheamn DNS — one service, every platform Docker runs on.
+#   docker compose up -d
+# Set OFOGH_PANEL_PASSWORD / OFOGH_PROXY_PASSWORD in .env for
+# fixed credentials; otherwise random ones are printed in the
+# first-run logs (docker compose logs).
+services:
+  ofogheamn-dns:
+    build: .
+    image: ofogheamn-dns:latest
+    container_name: ofogheamn-dns
+    restart: unless-stopped
+    environment:
+      OFOGH_DNS_HOSTNAME: ${OFOGH_DNS_HOSTNAME:-dns.ofogheamn.ir}
+      OFOGH_PANEL_PASSWORD: ${OFOGH_PANEL_PASSWORD:-}
+      OFOGH_PROXY_PASSWORD: ${OFOGH_PROXY_PASSWORD:-}
+    ports:
+      - "53:53/udp"
+      - "53:53/tcp"
+      - "853:853/tcp"
+      - "853:853/udp"
+      - "443:443/tcp"
+      - "443:443/udp"
+      - "2080:2080/tcp"
+      - "2080:2080/udp"
+      - "8080:8080/tcp"
+    volumes:
+      - ofogheamn-etc:/etc/ofogheamn-dns
+    cap_add:
+      - NET_BIND_SERVICE
+      - NET_RAW   # ICMP speed-check of game endpoints
+
+volumes:
+  ofogheamn-etc:

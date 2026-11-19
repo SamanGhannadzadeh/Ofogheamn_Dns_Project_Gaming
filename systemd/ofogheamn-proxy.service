@@ -1,0 +1,15 @@
+[Unit]
+Description=Ofogheamn Proxy — gaming proxy (sing-box, mixed HTTP/SOCKS5)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/sing-box run -c /etc/ofogheamn-dns/singbox.json
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=true
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

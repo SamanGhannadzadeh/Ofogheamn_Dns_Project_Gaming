@@ -1,0 +1,20 @@
+# Call of Duty / Warzone — dedicated domain set.
+# These get the strictest treatment in smartdns.conf: fastest-IP
+# selection measured on ping + tcp:443, aggressive prefetch,
+# match-length serve-stale pinning and cache warming.
+#
+# Demonware runs CoD's backend (auth, matchmaking, profiles,
+# storage) — its regional endpoints are chosen by DNS, which is
+# exactly what this project optimises.
+demonware.net
+callofduty.com
+activision.com
+atvi.com
+battle.net
+blizzard.com
+blizzard.net
+activisionblizzard.com
+sledgehammergames.com
+infinityward.com
+treyarch.com
+raven-software.com

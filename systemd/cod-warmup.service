@@ -1,0 +1,8 @@
+[Unit]
+Description=Ofogheamn DNS — CoD/Warzone cache warmer (Match-Ready)
+After=ofogheamn-dns.service
+Wants=ofogheamn-dns.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/cod-warmup

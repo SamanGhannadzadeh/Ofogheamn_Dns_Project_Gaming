@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Ofogheamn DNS Panel
+Name[fa]=پنل مدیریت DNS افق امن
+Comment=Gaming DNS + proxy management panel
+Comment[fa]=پنل مدیریت DNS و پروکسی گیمینگ افق امن
+Exec=xdg-open http://127.0.0.1:8080
+Icon=network-workgroup
+Terminal=false
+Categories=Network;Settings;

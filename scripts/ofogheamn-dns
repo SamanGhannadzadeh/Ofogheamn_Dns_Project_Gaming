@@ -1,0 +1,185 @@
+#!/bin/bash
+# ============================================================
+#  Ofogheamn DNS — management CLI (v2)
+#  Run bare for an interactive menu, or use subcommands:
+#    status | mode [public|private] | allow list|add|remove <net>
+#    hijack list|add <domain> <ip>|remove <domain>
+#    game  list|add <domain>|remove <domain>      (gaming list)
+#    cod   list|add <domain>|remove <domain>      (CoD list)
+#    proxy status|users|add-user <u> <p>|del-user <u>|restart
+#    panel | panel-password <new> | cod-test | warmup
+#    restart | logs [dns|proxy] [n] | test | update | firewall
+# ============================================================
+set -u
+ETC=/etc/ofogheamn-dns
+SVC=ofogheamn-dns
+if [ -t 1 ]; then B=$'\033[1m'; G=$'\033[32m'; C=$'\033[36m'; R=$'\033[31m'; N=$'\033[0m'; else B=; G=; C=; R=; N=; fi
+need_root() { [ "$(id -u)" = "0" ] || { echo "${R}run with sudo${N}"; exit 1; }; }
+state() { systemctl is-active "$1" 2>/dev/null || echo unknown; }
+get_mode() { grep -E '^mode=' "$ETC/mode.conf" 2>/dev/null | cut -d= -f2; }
+reload_dns() { systemctl restart "$SVC" && echo "${G}DNS reloaded${N}"; }
+gen_proxy() { OFOGH_ETC="$ETC" python3 /usr/local/lib/ofogheamn-dns/gen-singbox-config.py; }
+
+cmd_status() {
+  echo "${B}== Ofogheamn DNS ==${N}"
+  echo " DNS service : $(state ofogheamn-dns)   (UDP/TCP 53, DoT 853, DoH 443)"
+  echo " Proxy       : $(state ofogheamn-proxy)   (mixed HTTP/SOCKS5 :2080, UDP on)"
+  echo " Panel       : $(state ofogheamn-panel)   (http://<server>:8080)"
+  echo " Cache warmer: $(state cod-warmup.timer)   (CoD/gaming lists, every 4 min)"
+  echo " Mode        : ${B}$(get_mode)${N}"
+  echo " Hijack rules: $(grep -cE '^(address|cname) ' "$ETC/hijack.conf" 2>/dev/null || echo 0)"
+  echo " CoD domains : $(grep -cvE '^\s*(#|$)' "$ETC/lists/cod.domains" 2>/dev/null || echo 0)   Gaming domains: $(grep -cvE '^\s*(#|$)' "$ETC/lists/gaming.domains" 2>/dev/null || echo 0)"
+  echo " Proxy users : $(python3 -c "import json;print(', '.join(u['user'] for u in json.load(open('$ETC/proxy-users.json'))))" 2>/dev/null || echo -)"
+}
+
+cmd_mode() {
+  case "${1:-}" in
+    public|private)
+      need_root; echo "mode=$1" > "$ETC/mode.conf"; bash /usr/local/bin/ofogheamn-firewall ;;
+    "") echo "mode: $(get_mode)  (change: ofogheamn-dns mode public|private)" ;;
+    *) echo "usage: ofogheamn-dns mode [public|private]"; return 64 ;;
+  esac
+}
+
+cmd_allow() {
+  case "${1:-list}" in
+    list) grep -vE '^\s*(#|$)' "$ETC/allowlist.txt" 2>/dev/null || echo "(empty)" ;;
+    add) need_root; grep -qx "$2" "$ETC/allowlist.txt" 2>/dev/null || echo "$2" >> "$ETC/allowlist.txt"; bash /usr/local/bin/ofogheamn-firewall ;;
+    remove) need_root; sed -i "\#^$2\$#d" "$ETC/allowlist.txt"; bash /usr/local/bin/ofogheamn-firewall ;;
+    *) echo "usage: ofogheamn-dns allow list|add|remove <ip-or-cidr>"; return 64 ;;
+  esac
+}
+
+list_op() { # $1=file $2=op $3=domain
+  case "$2" in
+    list) grep -vE '^\s*(#|$)' "$1" ;;
+    add) need_root; grep -qx "$3" "$1" || echo "$3" >> "$1"; echo "added: $3"; reload_dns ;;
+    remove) need_root; sed -i "/^$3$/d" "$1"; echo "removed: $3"; reload_dns ;;
+  esac
+}
+
+cmd_proxy() {
+  case "${1:-status}" in
+    status) echo "proxy: $(state ofogheamn-proxy) on :2080 (mixed HTTP/SOCKS5 + UDP)" ;;
+    restart) need_root; systemctl restart ofogheamn-proxy && echo ok ;;
+    users) python3 -c "import json;[print(u['user']) for u in json.load(open('$ETC/proxy-users.json'))]" 2>/dev/null || echo "(none)" ;;
+    add-user)
+      need_root
+      python3 - "$2" "$3" <<'PY'
+import json, sys
+p = "/etc/ofogheamn-dns/proxy-users.json"
+try: users = json.load(open(p))
+except Exception: users = []
+users = [u for u in users if u["user"] != sys.argv[1]]
+users.append({"user": sys.argv[1], "pass": sys.argv[2]})
+json.dump(users, open(p, "w"), indent=1)
+print("user saved:", sys.argv[1])
+PY
+      gen_proxy; systemctl restart ofogheamn-proxy && echo "${G}proxy reloaded${N}" ;;
+    del-user)
+      need_root
+      python3 - "$2" <<'PY'
+import json, sys
+p = "/etc/ofogheamn-dns/proxy-users.json"
+users = [u for u in json.load(open(p)) if u["user"] != sys.argv[1]]
+json.dump(users, open(p, "w"), indent=1)
+print("user removed:", sys.argv[1])
+PY
+      gen_proxy; systemctl restart ofogheamn-proxy && echo "${G}proxy reloaded${N}" ;;
+    *) echo "usage: ofogheamn-dns proxy status|users|add-user <u> <p>|del-user <u>|restart"; return 64 ;;
+  esac
+}
+
+menu() {
+  while true; do
+    echo; echo "${B}${C}🌐 Ofogheamn DNS — منوی مدیریت${N}"
+    echo " 1) وضعیت کامل        2) ری‌استارت DNS      3) ری‌استارت پروکسی"
+    echo " 4) حالت عمومی/خصوصی  5) قوانین هایجک        6) تست کالاف (cod-test)"
+    echo " 7) لاگ DNS           8) کاربران پروکسی      9) گرم‌کردن کش"
+    echo " 0) خروج"
+    printf " انتخاب: "; read -r ch
+    case "$ch" in
+      1) cmd_status ;;
+      2) need_root; reload_dns ;;
+      3) cmd_proxy restart ;;
+      4) printf "حالت جدید (public/private): "; read -r m; cmd_mode "$m";
+         printf "شبکهٔ مجاز برای حالت خصوصی (CIDR، خالی = رد): "; read -r net; [ -n "$net" ] && cmd_allow add "$net" ;;
+      5) grep -E '^(address|cname) ' "$ETC/hijack.conf" || echo "(none)";
+         printf "افزودن: domain ip (خالی = رد): "; read -r d ip; [ -n "${d:-}" ] && [ -n "${ip:-}" ] && $0 add-hijack "$d" "$ip" ;;
+      6) $0 cod-test ;;
+      7) tail -n 30 /var/log/ofogheamn-dns/smartdns.log ;;
+      8) cmd_proxy users; printf "کاربر جدید (user pass، خالی = رد): "; read -r u p; [ -n "${u:-}" ] && [ -n "${p:-}" ] && cmd_proxy add-user "$u" "$p" ;;
+      9) need_root; systemctl start cod-warmup.service && echo ok ;;
+      0) break ;;
+      *) echo "?" ;;
+    esac
+  done
+}
+
+case "${1:-menu}" in
+  menu) [ -t 0 ] && menu || cmd_status ;;
+  status) cmd_status ;;
+  mode) shift; cmd_mode "${1:-}" ;;
+  allow) shift; cmd_allow "$@" ;;
+  firewall) need_root; bash /usr/local/bin/ofogheamn-firewall ;;
+  panel) echo "Panel: http://$(hostname -I | awk '{print $1}'):8080  (state: $(state ofogheamn-panel))" ;;
+  panel-password)
+    need_root
+    python3 - "$2" <<'PY'
+import hashlib, sys
+h = hashlib.sha256(sys.argv[1].encode()).hexdigest()
+lines = []
+try: lines = [l for l in open("/etc/ofogheamn-dns/panel.conf").read().splitlines() if not l.startswith("password_hash=")]
+except OSError: lines = ["port=8080", "bind=0.0.0.0"]
+lines.append("password_hash=" + h)
+open("/etc/ofogheamn-dns/panel.conf", "w").write("\n".join(lines) + "\n")
+print("panel password updated")
+PY
+    systemctl restart ofogheamn-panel 2>/dev/null || true ;;
+  proxy) shift; cmd_proxy "$@" ;;
+  restart) need_root; reload_dns ;;
+  start) need_root; systemctl start "$SVC" ;;
+  stop) need_root; systemctl stop "$SVC" ;;
+  logs) tail -n "${3:-50}" "/var/log/ofogheamn-dns/${2:-smartdns}.log" 2>/dev/null || tail -n "${3:-50}" /var/log/ofogheamn-dns/smartdns.log ;;
+  add-hijack)
+    need_root
+    [ -n "${2:-}" ] && [ -n "${3:-}" ] || { echo "usage: ofogheamn-dns add-hijack <domain> <ipv4>"; exit 64; }
+    grep -q "^address /$2/" "$ETC/hijack.conf" && sed -i "s#^address /$2/.*#address /$2/$3#" "$ETC/hijack.conf" \
+      || echo "address /$2/$3" >> "$ETC/hijack.conf"
+    echo "hijack: $2 -> $3"; reload_dns ;;
+  remove-hijack) need_root; sed -i "\#^address /$2/#d" "$ETC/hijack.conf"; echo "removed: $2"; reload_dns ;;
+  list-hijack) grep -E "^(address|cname)" "$ETC/hijack.conf" || echo "(none)" ;;
+  add-game) list_op "$ETC/lists/gaming.domains" add "$2" ;;
+  remove-game) list_op "$ETC/lists/gaming.domains" remove "$2" ;;
+  list-games) list_op "$ETC/lists/gaming.domains" list ;;
+  game) shift; list_op "$ETC/lists/gaming.domains" "${1:-list}" "${2:-}" ;;
+  cod) shift; list_op "$ETC/lists/cod.domains" "${1:-list}" "${2:-}" ;;
+  warmup) need_root; systemctl start cod-warmup.service && echo ok ;;
+  cod-test)
+    echo "Call of Duty / Warzone — winning endpoints right now:"
+    for d in demonware.net callofduty.com battle.net activision.com; do
+      printf "%-18s -> " "$d"
+      dig +short +time=3 +tries=1 @127.0.0.1 "$d" A 2>/dev/null | head -1
+      dig +stats @127.0.0.1 "$d" A 2>/dev/null | awk '/Query time/{print "   answer time: " $4 " ms"}'
+    done ;;
+  test)
+    echo "-- UDP/53 --"; dig +stats @127.0.0.1 callofduty.com A 2>/dev/null | grep -E "Query time" || echo "no answer"
+    echo "-- cached --"; dig +stats @127.0.0.1 callofduty.com A 2>/dev/null | grep -E "Query time" || true
+    echo "-- TCP/53 --"; dig +tcp +stats @127.0.0.1 store.steampowered.com A 2>/dev/null | grep -E "Query time" || echo "no answer"
+    echo "-- DoT/853 --"; echo | openssl s_client -connect 127.0.0.1:853 2>/dev/null | grep -E "Verify return code" || echo "DoT not answering"
+    echo "-- DoH/443 --"; curl -sk --max-time 5 --doh-url https://127.0.0.1/dns-query --doh-insecure https://example.com -o /dev/null -w "doh http %{http_code}\n" || echo "DoH not answering"
+    echo "-- Proxy/2080 --"; curl -s --max-time 5 -x socks5h://127.0.0.1:2080 https://example.com -o /dev/null -w "proxy http %{http_code} (401/auth expected without user)\n" || echo "proxy not answering" ;;
+  update)
+    need_root
+    TAG="$(curl -sIL -o /dev/null -w '%{url_effective}' https://github.com/pymumu/smartdns/releases/latest | sed 's#.*/tag/##')"
+    case "$(uname -m)" in x86_64) A=x86_64 ;; aarch64|arm64) A=aarch64 ;; esac
+    echo "updating SmartDNS core -> $TAG"
+    curl -fsSL -o /usr/local/bin/smartdns.new "https://github.com/pymumu/smartdns/releases/download/$TAG/smartdns-$A" \
+      && chmod 755 /usr/local/bin/smartdns.new && mv /usr/local/bin/smartdns.new /usr/local/bin/smartdns
+    STAG="$(curl -sIL -o /dev/null -w '%{url_effective}' https://github.com/SagerNet/sing-box/releases/latest | sed 's#.*/tag/##')"
+    echo "updating sing-box -> $STAG"
+    curl -fsSL "https://github.com/SagerNet/sing-box/releases/download/$STAG/sing-box-${STAG#v}-linux-amd64.tar.gz" \
+      | tar -xz -C /tmp && install -m 755 "/tmp/sing-box-${STAG#v}-linux-amd64/sing-box" /usr/local/bin/sing-box
+    reload_dns; systemctl restart ofogheamn-proxy ;;
+  *) sed -n '2,12p' "$0" ;;
+esac

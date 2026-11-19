@@ -1,0 +1,15 @@
+[Unit]
+Description=Ofogheamn DNS — web management panel
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/local/lib/ofogheamn-dns/panel.py
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=true
+ProtectSystem=false
+
+[Install]
+WantedBy=multi-user.target

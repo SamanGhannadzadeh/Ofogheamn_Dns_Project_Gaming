@@ -1,0 +1,76 @@
+# Gaming domains routed to the fastest-IP engine (one per line).
+# Call of Duty / Activision / Blizzard
+activision.com
+callofduty.com
+blizzard.com
+battle.net
+blizzard.net
+demonware.net
+# Electronic Arts
+ea.com
+origin.com
+dice.se
+respawn.com
+# Riot Games
+riotgames.com
+leagueoflegends.com
+valorant.com
+# Valve / Steam
+steampowered.com
+steamcommunity.com
+steamstatic.com
+valvesoftware.com
+counter-strike.net
+dota2.com
+# Epic Games
+epicgames.com
+epicgames.dev
+fortnite.com
+unrealengine.com
+# Xbox / Microsoft gaming
+xboxlive.com
+xbox.com
+xboxservices.com
+gamepass.com
+# PlayStation Network
+playstation.com
+playstation.net
+playstationnetwork.com
+sonyentertainmentnetwork.com
+scea.com
+# Ubisoft
+ubisoft.com
+ubi.com
+# Rockstar Games
+rockstargames.com
+socialclub.rockstargames.com
+# PUBG / Krafton
+pubg.com
+krafton.com
+pubgmobile.com
+# Roblox
+roblox.com
+rbxcdn.com
+# Minecraft / Mojang
+minecraft.net
+mojang.com
+# Nintendo
+nintendo.com
+nintendo.net
+# Garena / Free Fire
+garena.com
+freefiremobile.com
+# Supercell
+supercell.com
+# MiHoYo / HoYoverse
+hoyoverse.com
+mihoyo.com
+genshinimpact.com
+# Twitch (streams + low-latency ingest discovery)
+twitch.tv
+ttvnw.net
+# Discord (voice region discovery)
+discord.com
+discord.gg
+discordapp.com
+discord.media
