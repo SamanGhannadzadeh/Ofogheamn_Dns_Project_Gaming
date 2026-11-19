@@ -16,8 +16,11 @@ import json, os, re, subprocess, sys, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib import request as urlrequest
 
-CONF = "/etc/ofogheamn-dns/mesh.json"
-STATE = "/run/ofogheamn-mesh-state.json"
+CONF = os.environ.get("OFOGH_MESH_CONF", "/etc/ofogheamn-dns/mesh.json")
+STATE = os.environ.get("OFOGH_MESH_STATE", "/run/ofogheamn-mesh-state.json")
+# On Windows/macOS nodes (AdGuard Home core) the agent measures,
+# reports and computes the best exit, but does not rewire routing:
+REPORT_ONLY = os.environ.get("OFOGH_MESH_REPORT_ONLY", "") == "1"
 UPSTREAM_CONF = "/etc/ofogheamn-dns/mesh-upstream.conf"
 WG_MESH_CONF = "/etc/ofogheamn-dns/wg-mesh.conf"
 LISTS = ["/etc/ofogheamn-dns/lists/cod.domains",
@@ -104,6 +107,8 @@ def sh(*args):
     subprocess.run(list(args), capture_output=True, text=True, timeout=30)
 
 def apply_dns(best, peers_by_name):
+    if REPORT_ONLY:
+        return
     lines = []
     if best != "direct" and best in peers_by_name:
         p = peers_by_name[best]
@@ -129,6 +134,8 @@ def apply_dns(best, peers_by_name):
         sh("systemctl", "restart", "ofogheamn-dns")
 
 def wg_mesh_up(peer, conf):
+    if REPORT_ONLY:
+        return
     priv = ""
     try:
         priv = open("/etc/ofogheamn-dns/mesh.key").read().strip()
@@ -166,6 +173,8 @@ def wg_mesh_up(peer, conf):
            "-j", "MASQUERADE")
 
 def wg_mesh_down():
+    if REPORT_ONLY:
+        return
     sh("ip", "rule", "del", "from", "10.66.0.0/24", "table", "66")
     sh("ip", "link", "del", "wg-mesh")
     sh("iptables", "-t", "nat", "-D", "POSTROUTING", "-o", "wg-mesh",

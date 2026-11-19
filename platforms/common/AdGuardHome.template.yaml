@@ -1,0 +1,38 @@
+# Ofogheamn DNS — AdGuard Home core config (Windows / macOS nodes)
+# Same model as the Linux SmartDNS core: every upstream races in
+# parallel and the fastest answer wins; big optimistic cache
+# (serve-stale); rate limiting for public nodes.
+http:
+  address: 0.0.0.0:3000
+dns:
+  bind_hosts:
+    - 0.0.0.0
+  port: 53
+  upstream_dns:
+    - https://cloudflare-dns.com/dns-query
+    - https://dns.google/dns-query
+    - tls://dns.quad9.net
+    - tls://dns.adguard-dns.com
+    - https://dns.adguard-dns.com/dns-query
+    - 1.1.1.1
+    - 8.8.8.8
+  upstream_mode: parallel
+  fastest_timeout: 1s
+  cache_size: 67108864
+  cache_ttl_min: 30
+  cache_ttl_max: 3600
+  cache_optimistic: true
+  ratelimit: 120
+  refuse_any: true
+  enable_dnssec: false
+filtering:
+  filtering_enabled: true
+  rewrites:
+__REWRITES__
+filters:
+  - enabled: true
+    url: https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts
+    name: StevenBlack Ads & Malware
+    id: 1700000001
+user_rules:
+  - '||use-application-dns.net^'
