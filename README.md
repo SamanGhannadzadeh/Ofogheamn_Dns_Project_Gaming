@@ -1,5 +1,10 @@
 # Ofogheamn DNS Project — Gaming Edition
 
+> **پروژه‌ای عمومی برای همهٔ گیمرها.** هدف این نیست که یک نفر سرویس داشته باشد؛ هدف این است که هر گیمری — با وصل‌شدن به نزدیک‌ترین نود — اتصال سریع‌تر و تمیزتری به بازی بگیرد و هر کسی بتواند برای شهر و رفیق‌هایش یک نود راه بیندازد.
+>
+> 🎮 **گیمری؟** راهنمای وصل‌شدن در ۲ دقیقه: [docs/USERS.fa.md](docs/USERS.fa.md)
+> 🖥️ **سرور داری؟** همین صفحه را ادامه بده و نود عمومی خودت را بالا بیاور.
+
 **سرور DNS و Smart DNS مخصوص گیمرها** — با هستهٔ SmartDNS، انتخاب سریع‌ترین IP سرور بازی از بین همهٔ پاسخ‌ها، پشتیبانی از جدیدترین پروتکل‌های DNS، قوانین هایجک (Smart DNS) و بهینه‌سازی ویژهٔ **Call of Duty / Warzone**.
 
 A gaming Smart-DNS server (SmartDNS core): fastest-IP answer selection, DNS hijacking rules, all modern DNS transports, and a dedicated Call of Duty / Warzone optimisation pack. One-command install on any Debian/Ubuntu server.
