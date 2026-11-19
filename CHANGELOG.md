@@ -1,3 +1,11 @@
+## v1.2.1 — 2026-11-20 (startup robustness)
+
+- Ship `config/mesh-upstream.conf` (comment-only placeholder) and
+  install it explicitly: `smartdns.conf` includes this file and
+  SmartDNS refuses to start when an included file is missing.
+  Found by running the real SmartDNS binary against the full
+  production config — it now parses and runs clean end-to-end.
+
 ## v1.2 — 2026-11-19 (health + operator tooling)
 
 - **Node health watchdog**: `ofogheamn-dns health`
