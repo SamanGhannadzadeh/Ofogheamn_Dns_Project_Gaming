@@ -227,6 +227,26 @@ def top_domains(n=12):
     return sorted(counts.items(), key=lambda kv: -kv[1])[:n]
 
 
+_health_cache = {"t": 0, "data": None}
+
+
+def health_get():
+    import time as _t
+    now = _t.time()
+    if _health_cache["data"] is not None and now - _health_cache["t"] < 60:
+        return _health_cache["data"]
+    data = {"healthy": None, "problems": ["health-script-missing"]}
+    try:
+        out = subprocess.run(
+            ["python3", "/usr/local/bin/ofogheamn-health.py", "--json"],
+            capture_output=True, text=True, timeout=15)
+        data = json.loads(out.stdout.strip().splitlines()[-1])
+    except Exception:
+        pass
+    _health_cache.update(t=now, data=data)
+    return data
+
+
 def status():
     mode, allow = mode_get()
     ver = ""
@@ -308,6 +328,8 @@ class Handler(BaseHTTPRequestHandler):
         qs = parse_qs(urlparse(self.path).query)
         if path == "/api/status":
             return self._json(200, status())
+        if path == "/api/health":
+            return self._json(200, health_get())
         if path == "/api/hijack":
             return self._json(200, {"rules": hijack_list()})
         if path == "/api/domains":
@@ -710,6 +732,12 @@ async function refresh(){try{const s=await api('/api/status');
   '<div class="card">دامنهٔ گیمینگ<b>'+s.gaming_count+'</b></div>'+
   '<div class="card">دامنهٔ مسدود<b>'+(s.blocklist_count||0)+'</b></div>'+
   '<div class="card">مش<b>'+(s.mesh_enabled?('روشن — خروجی: '+(s.mesh_best||'…')):'خاموش')+'</b></div>';
+ try{const h=await api('/api/health');
+  $('cards').innerHTML+=
+   '<div class="card">سلامت نود<b>'+(h.healthy?'<span class="ok">سالم</span>':'<span class="bad">'+(h.problems||[]).join('، ')+'</span>')+'</b></div>'+
+   '<div class="card">پاسخ DNS محلی<b>'+(h.dns_answer_ms!=null?h.dns_answer_ms+' ms':'—')+'</b></div>'+
+   '<div class="card">گواهی TLS<b>'+(h.cert_days_left!=null?h.cert_days_left+' روز':'—')+'</b></div>';
+ }catch(e){}
  $('tops').innerHTML='<table>'+(s.top_domains||[]).map(x=>'<tr><td>'+x[0]+'</td><td>'+x[1]+'</td></tr>').join('')+'</table>';
  $('m-mode').value=s.mode;$('m-allow').value=(s.allowlist||[]).join('\n');
  $('p-info').textContent='کاربران فعلی: '+(s.proxy_users||[]).join('، ');

@@ -122,6 +122,7 @@ install -m 755 "$SRC_DIR/scripts/ofogheamn-wg-peer.py" /usr/local/bin/ofogheamn-
 install -m 755 "$SRC_DIR/scripts/ofogheamn-mesh.py" /usr/local/bin/ofogheamn-mesh.py
 install -m 755 "$SRC_DIR/scripts/ofogheamn-region.py" /usr/local/bin/ofogheamn-region.py
 install -m 755 "$SRC_DIR/scripts/ofogheamn-bench.py" /usr/local/bin/ofogheamn-bench.py
+install -m 755 "$SRC_DIR/scripts/ofogheamn-health.py" /usr/local/bin/ofogheamn-health.py
 if ! command -v wg >/dev/null 2>&1; then
   say "installing wireguard-tools"
   apt-get update -qq >/dev/null 2>&1 || true
@@ -185,12 +186,15 @@ cp "$SRC_DIR/systemd/ofogheamn-blocklist.service" /etc/systemd/system/ofogheamn-
 cp "$SRC_DIR/systemd/ofogheamn-blocklist.timer" /etc/systemd/system/ofogheamn-blocklist.timer
 cp "$SRC_DIR/systemd/ofogheamn-proxy.service" /etc/systemd/system/ofogheamn-proxy.service
 cp "$SRC_DIR/systemd/ofogheamn-mesh.service" /etc/systemd/system/ofogheamn-mesh.service
+cp "$SRC_DIR/systemd/ofogheamn-health.service" /etc/systemd/system/ofogheamn-health.service
+cp "$SRC_DIR/systemd/ofogheamn-health.timer" /etc/systemd/system/ofogheamn-health.timer
 # Mesh is OPT-IN: installed but never enabled by the installer.
 # The owner turns it on with: ofogheamn-dns mesh on
 touch /etc/ofogheamn-dns/mesh-upstream.conf
 systemctl daemon-reload
 systemctl enable ofogheamn-dns >/dev/null 2>&1 || true
 systemctl enable --now cod-warmup.timer >/dev/null 2>&1 || true
+systemctl enable --now ofogheamn-health.timer >/dev/null 2>&1 || true
 [ "$LITE" != "1" ] && systemctl enable --now ofogheamn-panel >/dev/null 2>&1 || true
 [ -x /usr/local/bin/sing-box ] && systemctl enable --now ofogheamn-proxy >/dev/null 2>&1 || true
 [ -f "$ETC/wg0.conf" ] && systemctl enable --now ofogheamn-wg >/dev/null 2>&1 || true

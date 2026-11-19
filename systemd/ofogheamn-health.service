@@ -1,0 +1,7 @@
+[Unit]
+Description=Ofogheamn DNS node health check (auto-restart DNS on failure)
+After=network-online.target ofogheamn-dns.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/ofogheamn-health.py --fix --json

@@ -140,6 +140,18 @@ PY
   proxy) shift; cmd_proxy "$@" ;;
   region) python3 /usr/local/bin/ofogheamn-region.py "${2:-}" ;;
   bench) python3 /usr/local/bin/ofogheamn-bench.py "${2:-}" ;;
+  health) python3 /usr/local/bin/ofogheamn-health.py "${2:-}" ;;
+  backup)
+    need_root
+    out="/var/backups/ofogheamn-$(date +%Y%m%d-%H%M%S).tar.gz"
+    mkdir -p /var/backups
+    tar -czf "$out" -C / etc/ofogheamn-dns 2>/dev/null
+    chmod 600 "$out"
+    echo "backup: $out" ;;
+  restore)
+    need_root
+    [ -n "${2:-}" ] && [ -f "$2" ] || { echo "usage: ofogheamn-dns restore <backup.tar.gz>"; exit 1; }
+    tar -xzf "$2" -C / && reload_dns && echo "restored from: $2" ;;
   reality)
     shift
     case "${1:-status}" in

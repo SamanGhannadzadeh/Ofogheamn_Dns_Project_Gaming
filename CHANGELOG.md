@@ -1,3 +1,16 @@
+## v1.2 — 2026-11-19 (health + operator tooling)
+
+- **Node health watchdog**: `ofogheamn-dns health`
+  (`ofogheamn-health.py`) — real DNS answer probe, service states,
+  TLS expiry, disk/load; a systemd timer runs it every 5 minutes
+  and restarts the DNS service once if it stops answering.
+- **Panel parity**: the dashboard now shows node health, local
+  DNS answer time and TLS days left (`/api/health`, cached 60 s).
+- **Backup / restore**: `ofogheamn-dns backup` writes a 0600
+  tarball of the whole node config to /var/backups;
+  `restore <file>` brings it back.
+- **Operator checklist**: docs/OPERATOR.fa.md.
+
 # تغییرات
 
 ## ۱٫۱ — ۱۹ نوامبر ۲۰۲۶ (ارتقای پژوهشی)
