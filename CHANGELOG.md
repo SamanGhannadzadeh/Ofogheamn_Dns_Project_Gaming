@@ -1,3 +1,19 @@
+## v1.6.1 — 2026-11-21 (health depth, installer guidance)
+
+- **Health checks the listeners, not just the units.** A
+  service can report "active" while its port is wedged; the
+  health report now probes the ports the node is configured
+  to serve (DoT 853, DoH 443, proxy 2080, panel 8080, and the
+  console port while enabled) and flags `port-closed-*`. A
+  malformed console.json is flagged instead of crashing.
+- **The installer points at the console port.** The closing
+  summary now tells PlayStation owners about
+  `ofogheamn-dns console enable` — the feature existed since
+  v1.6 but a fresh install never mentioned it.
+- **The console feature has a functional test.** The static
+  suite now runs the sing-box generator both ways and asserts
+  the inbound exists exactly when console.json does.
+
 ## v1.6 — 2026-11-20 (console proxy, upstream watch, production tuning)
 
 Lessons from the first production node, folded back into the

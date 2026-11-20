@@ -166,6 +166,25 @@ def main():
     for target in dead_upstreams:
         problems.append(f"upstream-dead-{target}")
 
+    # Local listeners: a service can report "active" while its
+    # port is wedged or taken. Adaptive like the core set above —
+    # only ports this node is configured to serve are checked.
+    listen_ports = [853, 443]
+    if os.path.exists("/usr/local/bin/sing-box"):
+        listen_ports.append(2080)
+    if os.path.exists("/etc/ofogheamn-dns/panel.conf"):
+        listen_ports.append(8080)
+    console_file = "/etc/ofogheamn-dns/console.json"
+    if os.path.exists(console_file):
+        try:
+            with open(console_file) as fh:
+                listen_ports.append(int(json.load(fh)["port"]))
+        except (OSError, ValueError, KeyError):
+            problems.append("console-config-bad")
+    for port in listen_ports:
+        if not tcp_open("127.0.0.1", port, timeout=1.0):
+            problems.append(f"port-closed-{port}")
+
     healthy = not problems
     report = {
         "healthy": healthy,

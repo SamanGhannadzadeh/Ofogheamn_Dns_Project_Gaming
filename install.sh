@@ -298,6 +298,8 @@ cat <<EOF
    DoH       : https://$HOSTNAME_DNS/dns-query
    DoQ       : $HOSTNAME_DNS : 853 (UDP)
  Proxy    : $PUBIP : 2080 (mixed HTTP/SOCKS5 + UDP, auth required)
+ Console  : PS5 proxy form has no login fields - enable the
+             no-auth console port with: ofogheamn-dns console enable
  VPN L2TP : $PUBIP  (L2TP/IPsec, native on Windows/Android/routers)
  VPN PPTP : $PUBIP : 1723  (legacy devices, MPPE-128 required)
  Panel    : $PANEL_LINE

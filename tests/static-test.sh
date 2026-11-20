@@ -93,6 +93,25 @@ has scripts/ofogheamn-dns 'console)'
 chk "CLI exposes the console command" $?
 has scripts/ofogheamn-health.py 'upstream-dead'
 chk "health reports dead upstreams by name" $?
+# Functional: the generator really emits the console inbound
+# only while console.json exists — end to end, not just strings.
+GT=$(mktemp -d)
+printf '[{"user":"t","pass":"t"}]' > "$GT/proxy-users.json"
+OFOGH_ETC="$GT" python3 scripts/gen-singbox-config.py >/dev/null 2>&1
+cp "$GT/singbox.json" "$GT/off.json" 2>/dev/null
+echo '{"port": 2081}' > "$GT/console.json"
+OFOGH_ETC="$GT" python3 scripts/gen-singbox-config.py >/dev/null 2>&1
+cp "$GT/singbox.json" "$GT/on.json" 2>/dev/null
+python3 - "$GT" <<'EOF'
+import json, sys
+gt = sys.argv[1]
+off = [i.get("tag") for i in json.load(open(gt + "/off.json"))["inbounds"]]
+on = [i.get("tag") for i in json.load(open(gt + "/on.json"))["inbounds"]]
+assert "ofogh-console" not in off, "console inbound without console.json"
+assert "ofogh-console" in on, "console inbound missing with console.json"
+EOF
+chk "generator emits console inbound only with console.json" $?
+rm -rf "$GT"
 # CLI update hardcoded the amd64 sing-box asset (broke ARM nodes).
 hasnot scripts/ofogheamn-dns 'linux-amd64\.tar\.gz'
 chk "CLI update has no hardcoded linux-amd64 tarball" $?
