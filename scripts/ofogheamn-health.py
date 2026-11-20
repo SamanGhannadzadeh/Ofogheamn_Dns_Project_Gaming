@@ -6,6 +6,11 @@ Checks, in order:
   2. Core services are active (dns / proxy / panel / wg / mesh).
   3. The TLS certificate (DoT/DoH) is not expired or near expiry.
   4. Disk and load are sane.
+  5. Every configured upstream still answers (a silently dead
+     upstream — a stale mesh peer, a filtered provider — used to
+     cost each cold lookup a full timeout before anyone noticed;
+     live-node incident, 2026-11-20). QUIC/H3 upstreams are
+     counted but not probed (no plain-DNS probe exists for them).
 
 With --fix, a failed query check restarts the DNS service once.
 Exit code 0 = healthy, 1 = something needs attention.
@@ -30,8 +35,8 @@ SERVICES = {
 CERT = "/etc/ofogheamn-dns/tls/fullchain.pem"
 
 
-def dns_query_ok(timeout=3.0):
-    """Send one raw A query for example.com to 127.0.0.1:53."""
+def raw_a_query(host, timeout=3.0):
+    """Send one raw A query for example.com to host:53 (UDP)."""
     tid = 0x0F0A
     pkt = struct.pack(">HHHHHH", tid, 0x0100, 1, 0, 0, 0)
     for part in b"example.com".split(b"."):
@@ -41,13 +46,59 @@ def dns_query_ok(timeout=3.0):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.settimeout(timeout)
         t0 = time.time()
-        s.sendto(pkt, ("127.0.0.1", 53))
+        s.sendto(pkt, (host, 53))
         data, _ = s.recvfrom(4096)
         ms = (time.time() - t0) * 1000
         rid, flags, qd, an = struct.unpack(">HHHH", data[:8])
         return rid == tid and an >= 1, round(ms, 1)
     except OSError:
         return False, None
+
+
+def dns_query_ok(timeout=3.0):
+    return raw_a_query("127.0.0.1", timeout)
+
+
+def tcp_open(host, port, timeout=2.0):
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def upstream_probe(conf="/etc/ofogheamn-dns/smartdns.conf", timeout=2.0):
+    """Probe every upstream in smartdns.conf; return (dead, probed).
+
+    plain server  -> real UDP query; server-tls -> TCP :853;
+    server-https  -> TCP :443 to the URL host. QUIC/H3 upstreams
+    are skipped (no plain probe exists). Report-only: a dead
+    upstream is flagged, never auto-removed.
+    """
+    dead, probed = [], 0
+    try:
+        lines = open(conf, encoding="utf-8").read().splitlines()
+    except OSError:
+        return dead, probed
+    for line in lines:
+        parts = line.split()
+        if len(parts) < 2 or line.lstrip().startswith("#"):
+            continue
+        kind, target = parts[0], parts[1]
+        if kind == "server":
+            probed += 1
+            if not raw_a_query(target, timeout)[0]:
+                dead.append(target)
+        elif kind == "server-tls":
+            probed += 1
+            if not tcp_open(target, 853, timeout):
+                dead.append(target + ":853")
+        elif kind == "server-https":
+            host = target.split("/")[2] if "://" in target else target
+            probed += 1
+            if not tcp_open(host, 443, timeout):
+                dead.append(host + ":443")
+    return list(dict.fromkeys(dead)), probed
 
 
 def svc_state(unit):
@@ -111,6 +162,10 @@ def main():
         disk_free_gb = None
     load1 = round(os.getloadavg()[0], 2)
 
+    dead_upstreams, probed_upstreams = upstream_probe()
+    for target in dead_upstreams:
+        problems.append(f"upstream-dead-{target}")
+
     healthy = not problems
     report = {
         "healthy": healthy,
@@ -120,6 +175,8 @@ def main():
         "cert_days_left": days,
         "disk_free_gb": disk_free_gb,
         "load1": load1,
+        "upstreams_dead": dead_upstreams,
+        "upstreams_probed": probed_upstreams,
     }
     if as_json:
         print(json.dumps(report, ensure_ascii=False))
@@ -132,6 +189,10 @@ def main():
         if days is not None:
             print(f"  گواهی TLS: {days} روز مانده")
         print(f"  دیسک آزاد: {disk_free_gb} GB · بار: {load1}")
+        if dead_upstreams:
+            print("  آپ‌استریم‌های مرده: " + ", ".join(dead_upstreams))
+        else:
+            print(f"  آپ‌استریم‌ها: هر {probed_upstreams} مورد زنده")
         print("نتیجه: " + ("سالم ✓" if healthy
                             else "نیازمند توجه: " + ", ".join(problems)))
     return 0 if healthy else 1

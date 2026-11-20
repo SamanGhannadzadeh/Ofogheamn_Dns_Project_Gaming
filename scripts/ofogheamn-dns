@@ -223,6 +223,33 @@ PY
     need_root
     [ -n "${2:-}" ] && [ -f "$2" ] || { echo "usage: ofogheamn-dns restore <backup.tar.gz>"; exit 1; }
     tar -xzf "$2" -C / && reload_dns && echo "restored from: $2" ;;
+  console)
+    shift
+    case "${1:-status}" in
+      enable)
+        need_root
+        CPORT="${2:-2081}"
+        python3 - "$CPORT" <<'PY'
+import json, sys, os
+p = "/etc/ofogheamn-dns/console.json"
+with open(p, "w") as fh: json.dump({"port": int(sys.argv[1])}, fh)
+os.chmod(p, 0o600)
+print("console port enabled:", sys.argv[1])
+PY
+        gen_proxy
+        systemctl restart ofogheamn-proxy 2>/dev/null || true
+        bash /usr/local/bin/ofogheamn-firewall >/dev/null 2>&1 || true
+        MODE_NOW="$(grep -E '^mode=' "$ETC/mode.conf" 2>/dev/null | cut -d= -f2)"
+        echo "PS5/Xbox: proxy = this server's IP, port $CPORT, no user/pass."
+        [ "$MODE_NOW" = "private" ] || echo "WARNING: mode is not private — the firewall BLOCKS the console port in public mode. Run: ofogheamn-dns mode private" ;;
+      disable)
+        need_root; rm -f /etc/ofogheamn-dns/console.json
+        gen_proxy
+        systemctl restart ofogheamn-proxy 2>/dev/null || true
+        bash /usr/local/bin/ofogheamn-firewall >/dev/null 2>&1 || true
+        echo "console port disabled" ;;
+      *) if [ -f /etc/ofogheamn-dns/console.json ]; then echo "console: on (port $(python3 -c "import json;print(json.load(open('/etc/ofogheamn-dns/console.json'))['port'])" 2>/dev/null || echo 2081))"; else echo "console: off"; fi ;;
+    esac ;;
   reality)
     shift
     case "${1:-status}" in

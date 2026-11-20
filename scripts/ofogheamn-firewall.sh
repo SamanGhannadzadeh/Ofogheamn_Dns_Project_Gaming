@@ -7,6 +7,9 @@
 # Private mode = only allowlisted sources + localhost pass; the
 # rest is dropped. The panel (8080) and the proxy (2080) are NOT
 # touched here: the panel has its own login, the proxy its users.
+# Exception: the optional no-auth CONSOLE proxy port (console.json)
+# has no login to protect it, so this script guards it — allowlist
+# chain in private mode, hard DROP in public mode.
 set -u
 ETC=/etc/ofogheamn-dns
 CHAIN=OFOGH_DNS_IN
@@ -52,6 +55,31 @@ if [ "$MODE" = "private" ]; then
   echo "mode=private applied (allowlist only)"
 else
   echo "mode=public applied (open resolver)"
+fi
+
+# Console proxy port (opt-in, no-auth — see gen-singbox-config.py):
+# consoles have no proxy-auth fields, so this port's only protection
+# is right here. Private mode routes it through the allowlist chain
+# like the DNS ports; public mode drops it outright — a no-auth
+# proxy must never be world-reachable.
+CPORT=""
+if [ -r "$ETC/console.json" ]; then
+  CPORT="$(python3 -c "import json;print(json.load(open('$ETC/console.json'))['port'])" 2>/dev/null || true)"
+fi
+if [ -n "$CPORT" ]; then
+  if [ "$MODE" = "private" ]; then
+    for proto in udp tcp; do
+      iptables -C INPUT -p "$proto" --dport "$CPORT" -j "$CHAIN" 2>/dev/null \
+        || iptables -I INPUT 1 -p "$proto" --dport "$CPORT" -j "$CHAIN"
+    done
+    echo "console port $CPORT: allowlist only (private)"
+  else
+    for proto in udp tcp; do
+      iptables -C INPUT -p "$proto" --dport "$CPORT" -j DROP 2>/dev/null \
+        || iptables -I INPUT 1 -p "$proto" --dport "$CPORT" -j DROP
+    done
+    echo "console port $CPORT: blocked (public mode)"
+  fi
 fi
 
 # VPN servers (L2TP/IPsec + PPTP): accept the tunnel ports on INPUT.

@@ -6,6 +6,16 @@ Single source of truth, used by install.sh, the panel and the CLI.
   output      : /etc/ofogheamn-dns/singbox.json
 The proxy is a "mixed" inbound (HTTP + SOCKS5 on one port, with
 SOCKS5 UDP ASSOCIATE for game UDP) and a direct outbound.
+
+Optional console inbound: game consoles (PS5/Xbox) offer an HTTP
+proxy setting with NO username/password fields, so the
+authenticated port can never work for them. When
+/etc/ofogheamn-dns/console.json exists ({"port": 2081}), a second
+mixed inbound WITHOUT auth is added on that port. It is safe only
+because ofogheamn-firewall guards the console port with the
+private-mode allowlist (and drops it entirely in public mode);
+never expose it any other way. Managed by:
+  ofogheamn-dns console enable|disable|status
 """
 import json
 import os
@@ -31,6 +41,20 @@ def main() -> int:
             "udp_fragment": True,
         }
     ]
+    # Optional console inbound (see module docstring): no auth, for
+    # PS5/Xbox proxy settings. The firewall guards this port.
+    console_file = os.path.join(ETC, "console.json")
+    console_port = None
+    if os.path.exists(console_file):
+        with open(console_file, encoding="utf-8") as fh:
+            console_port = int(json.load(fh).get("port", 2081))
+        inbounds.append({
+            "type": "mixed",
+            "tag": "ofogh-console",
+            "listen": "::",
+            "listen_port": console_port,
+            "udp_fragment": True,
+        })
     # Optional VLESS+REALITY inbound (transport fallback ladder, top
     # rung for filtered paths — enabled via `ofogheamn-dns reality
     # enable`, which writes /etc/ofogheamn-dns/reality.json). The
@@ -88,7 +112,9 @@ def main() -> int:
     with open(out, "w", encoding="utf-8") as fh:
         json.dump(cfg, fh, indent=2)
     os.chmod(out, 0o600)
-    print(f"singbox.json written: {len(users)} user(s), port {PORT}")
+    print(f"singbox.json written: {len(users)} user(s), port {PORT}"
+          + (f", console port {console_port} (no auth, firewall-guarded)"
+             if console_port else ""))
     return 0
 
 
