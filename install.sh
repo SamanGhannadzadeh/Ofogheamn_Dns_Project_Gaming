@@ -10,6 +10,12 @@
 # ============================================================
 set -euo pipefail
 
+# When this script is piped in (curl | bash), bash reads the script
+# itself from stdin — and any child that reads stdin (apt-get did, on
+# Ubuntu 26.04) eats the rest of the script, silently skipping whole
+# sections. The installer is fully non-interactive, so detach stdin.
+exec </dev/null
+
 REPO_URL="https://github.com/saman-ghannadzadeh/Ofogheamn_Dns_Project_Gaming"
 HOSTNAME_DNS="${OFOGH_DNS_HOSTNAME:-dns.ofogheamn.ir}"
 # Lite edition (no web panel):  sudo bash install.sh --lite   or   OFOGH_LITE=1
