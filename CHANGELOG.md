@@ -1,3 +1,27 @@
+## v1.11 — 2026-11-21 (frontier platform + evaluations; survey stage 3)
+
+- **AmneziaWG platform (experimental).** `platforms/amneziawg/`
+  carries a README (why: WireGuard's one-packet fingerprint;
+  what it needs: the AWG kernel module + awg tools; honest
+  limits: UDP-only, no active-probe resistance) and
+  `awgify.py`, a stdlib converter that turns an existing
+  WireGuard config into an AmneziaWG one (Jc/Jmin/Jmax junk,
+  S1/S2 padding, H1–H4 magic header ranges). Parameters are
+  generated once, saved to a JSON file, and reused verbatim
+  for the peer config — the suite proves both ends come out
+  byte-identical, because mismatched parameters are the
+  classic AWG no-connect.
+- **docs/FRONTIER.fa.md.** The survey items that are NOT
+  becoming defaults, with reasons an operator can re-check:
+  BBRv3 (not mainline — A/B procedure only), MASQUE
+  (sing-box 1.15-alpha — watch), Xray sidecar for XHTTP
+  (evaluated, rejected for now: a second core doubles the
+  digest-verified update surface for a capability with no
+  measured path where REALITY/443 fails and XHTTP passes),
+  multi-path packet duplication (client-side design note),
+  anycast+BFD (deployment-level, out of single-node scope;
+  its serve-stale half already ships).
+
 ## v1.10 — 2026-11-21 (recursive back-end; survey stage 2)
 
 - **Unbound recursive back-end (opt-in).** 

@@ -163,6 +163,26 @@ assert inb["ofogh-hysteria2"]["obfs"]["type"] == "gecko", "gecko obfs not emitte
 EOF
 chk "generator emits tuic, anytls and gecko obfs from their files" $?
 rm -rf "$GT"
+
+echo "== awgify functional (v1.11) =="
+AT="$(mktemp -d)"
+cat > "$AT/wg.conf" <<'EOF'
+[Interface]
+PrivateKey = AAAA
+Address = 10.66.0.1/24
+ListenPort = 51820
+
+[Peer]
+PublicKey = BBBB
+AllowedIPs = 0.0.0.0/0
+EOF
+python3 platforms/amneziawg/awgify.py "$AT/wg.conf" --write-params "$AT/p.json" > "$AT/awg.conf" 2>/dev/null
+grep -q "^Jc = " "$AT/awg.conf"; chk "awgify adds junk parameters" $?
+grep -q "^H4 = " "$AT/awg.conf"; chk "awgify adds magic header ranges" $?
+grep -q "PrivateKey = AAAA" "$AT/awg.conf"; chk "awgify preserves the interface keys" $?
+python3 platforms/amneziawg/awgify.py "$AT/wg.conf" --params "$AT/p.json" > "$AT/awg2.conf" 2>/dev/null
+cmp -s "$AT/awg.conf" "$AT/awg2.conf"; chk "awgify reuses shared params identically (both ends match)" $?
+rm -rf "$AT"
 # CLI update hardcoded the amd64 sing-box asset (broke ARM nodes).
 hasnot scripts/ofogheamn-dns 'linux-amd64\.tar\.gz'
 chk "CLI update has no hardcoded linux-amd64 tarball" $?

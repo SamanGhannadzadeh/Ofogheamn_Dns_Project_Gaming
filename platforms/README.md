@@ -10,6 +10,7 @@
 | MikroTik RouterOS 7 | `platforms/mikrotik/container.rsc` | اجرای سرور داخل کانتینر RouterOS (CHR و بردهای ARM/x86 با پکیج container) |
 | macOS | `platforms/macos/install.sh` | نود بومی (Apple Silicon و Intel): هستهٔ AdGuard Home + پروکسی sing-box با launchd؛ یا Docker |
 | گیت‌وی شبکه (هر روتر) | پوشهٔ `gateway/` | فقط لایهٔ اجبار: ریدایرکت ۵۳ + بستن دورزدن |
+| AmneziaWG (تونل آزمایشی) | `platforms/amneziawg/` | آزمایشی: وایرگاردِ پنهان‌شده در برابر فینگرپرینت + مبدل کانفیگ awgify |
 
 نکته‌ها:
 
