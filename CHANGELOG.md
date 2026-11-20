@@ -1,3 +1,36 @@
+## v1.6 — 2026-11-20 (console proxy, upstream watch, production tuning)
+
+Lessons from the first production node, folded back into the
+project.
+
+### Features
+- **Console proxy for PlayStation.** The PS5 proxy form has no
+  username/password fields, so the authenticated port can never
+  work there. `ofogheamn-dns console enable [port]` (default
+  2081) now writes `console.json`; the sing-box generator adds
+  a no-auth `ofogh-console` inbound only while that file
+  exists, and the firewall guards the port — allowlist chain
+  in private mode, hard DROP in public mode. The panel is
+  never involved; the authenticated port is unchanged.
+- **Health watches the upstreams.** `ofogheamn-health.py` now
+  probes every upstream named in `smartdns.conf` (UDP query
+  for plain servers, TCP connect for DoT/DoH) and reports dead
+  ones by name as `upstream-dead-*` problems. Report-only: a
+  VPS whose egress stalls on one transport no longer fails
+  silently behind a resolver that looks "up".
+
+### Tuning (measured on the production node)
+- **Global speed check off.** `speed-check-mode none` is now
+  the shipped default: measured cold lookups dropped from
+  ~950 ms to ~80 ms, because the check measured every upstream
+  on every cold name. The per-domain gaming/CoD rules still
+  enforce fastest-IP where it pays.
+- **Gaming upstream group is DoT + UDP only.** DoH and QUIC
+  binds stay in the default group; on the measured VPS their
+  handshake stalls (up to 6 s) hit gaming names first.
+- **Kernel:** TCP buffers raised to 16 MB in the shipped
+  sysctl file, conntrack ceiling 262144, swappiness 10.
+
 ## v1.5 — 2026-11-20 (verification hardening)
 
 A fresh audit of every installer and entry point, hunting the

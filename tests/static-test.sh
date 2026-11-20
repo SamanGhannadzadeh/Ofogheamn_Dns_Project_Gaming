@@ -81,6 +81,18 @@ chk "macos install.sh REPO_ROOT does not go up three levels" $?
 # (hand-writing it dropped the REALITY inbound).
 has panel/panel.py 'gen-singbox-config.py'
 chk "panel regenerates sing-box config via the generator" $?
+# Console proxy (v1.6): generator, firewall and CLI must agree —
+# a no-auth inbound without its firewall guard is a hole.
+has scripts/gen-singbox-config.py 'console.json'
+chk "generator reads console.json for the console proxy" $?
+has scripts/gen-singbox-config.py 'ofogh-console'
+chk "generator emits the ofogh-console inbound" $?
+has scripts/ofogheamn-firewall.sh 'CPORT'
+chk "firewall guards the console port" $?
+has scripts/ofogheamn-dns 'console)'
+chk "CLI exposes the console command" $?
+has scripts/ofogheamn-health.py 'upstream-dead'
+chk "health reports dead upstreams by name" $?
 # CLI update hardcoded the amd64 sing-box asset (broke ARM nodes).
 hasnot scripts/ofogheamn-dns 'linux-amd64\.tar\.gz'
 chk "CLI update has no hardcoded linux-amd64 tarball" $?
