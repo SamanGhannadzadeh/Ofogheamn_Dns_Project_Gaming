@@ -82,6 +82,26 @@ if [ -n "$CPORT" ]; then
   fi
 fi
 
+# Hysteria2 tunnel port (opt-in, password-authenticated — see
+# gen-singbox-config.py): private mode routes it through the
+# allowlist chain like the other service ports; public mode opens
+# it, because unlike the console port it has real auth.
+HY2=""
+if [ -r "$ETC/hysteria2.json" ]; then
+  HY2="$(python3 -c "import json;print(json.load(open('$ETC/hysteria2.json'))['port'])" 2>/dev/null || true)"
+fi
+if [ -n "$HY2" ]; then
+  if [ "$MODE" = "private" ]; then
+    iptables -C INPUT -p udp --dport "$HY2" -j "$CHAIN" 2>/dev/null \
+      || iptables -I INPUT 1 -p udp --dport "$HY2" -j "$CHAIN"
+    echo "hysteria2 port $HY2: allowlist only (private)"
+  else
+    iptables -C INPUT -p udp --dport "$HY2" -j ACCEPT 2>/dev/null \
+      || iptables -I INPUT 1 -p udp --dport "$HY2" -j ACCEPT
+    echo "hysteria2 port $HY2: open (password auth)"
+  fi
+fi
+
 # VPN servers (L2TP/IPsec + PPTP): accept the tunnel ports on INPUT.
 # Idempotent. UDP 1701 is only ever useful inside IPsec (the PSK
 # gate is strongSwan on 500/4500), but xl2tpd binds it plainly, so

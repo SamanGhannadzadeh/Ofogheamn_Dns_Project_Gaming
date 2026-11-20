@@ -111,9 +111,11 @@ ofogheamn-dns proxy users
 
 **پورت کنسول (PS5/Xbox):** تنظیم پروکسی کنسول‌ها جای نام کاربری/رمز ندارد و پورت ۲۰۸۰ برایشان کار نمی‌کند. فرمان `ofogheamn-dns console enable` یک ورودی دومِ **بدون رمز** روی پورت ۲۰۸۱ می‌سازد که تنها محافظش فایروال است: در حالت خصوصی فقط فهرست مجاز، و در حالت عمومی کاملاً بسته. روی کنسول فقط آی‌پی سرور و پورت ۲۰۸۱ را بزن.
 
+**تونل Hysteria2 (پلهٔ ۲ نردبان ترنسپورت):** فرمان `ofogheamn-dns hysteria2 enable` ورودی QUIC هایستریا۲ را روی UDP ‏۴۴۳ روشن می‌کند — کنترل ازدحام Brutal روی مسیرهای پراتلاف سرعت را نگه می‌دارد، همان‌جا که وایرگارد می‌خوابد. رمزدار است: در حالت خصوصی فقط فهرست مجاز، در حالت عمومی باز با احراز هویت.
+
 **پایش آپ‌استریم:** چک سلامت (`ofogheamn-dns health`) حالا زنده‌بودن تک‌تک آپ‌استریم‌های کانفیگ را هم می‌سنجد و مرده‌ها را با نام گزارش می‌کند — آپ‌استریم مردهٔ بی‌صدا دیگر هر لوک‌آپ سرد را معطل نمی‌کند.
 
-**همهٔ فرمان‌های `ofogheamn-dns`:** `status`، `start`، `stop`، `restart`، `logs`، `health`، `test`، `mode`، `allow`، `proxy`، `console`، `reality`، `vpn`، `wg`، `mesh`، `panel`، `panel-password`، `game`، `add-game`، `remove-game`، `list-games`، `cod`، `cod-test`، `warmup`، `add-hijack`، `remove-hijack`، `list-hijack`، `bench`، `region`، `firewall`، `backup`، `restore`، `update`، `menu`
+**همهٔ فرمان‌های `ofogheamn-dns`:** `status`، `start`، `stop`، `restart`، `logs`، `health`، `test`، `mode`، `allow`، `proxy`، `console`، `reality`، `hysteria2`، `vpn`، `wg`، `mesh`، `panel`، `panel-password`، `game`، `add-game`، `remove-game`، `list-games`، `cod`، `cod-test`، `warmup`، `add-hijack`، `remove-hijack`، `list-hijack`، `bench`، `region`، `firewall`، `backup`، `restore`، `update`، `menu`
 
 ## تونل گیمینگ — دستگاه ← سرور تو ← بازی | Gaming tunnel
 

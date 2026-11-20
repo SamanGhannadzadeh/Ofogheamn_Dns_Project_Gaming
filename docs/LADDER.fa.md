@@ -17,6 +17,11 @@
   روی ۴۴۳ کنار پروکسی همیشگی (mixed ‏۲۰۸۰) روشن می‌شود و مشخصات
   کلاینت‌ها در `/etc/ofogheamn-dns/reality-clients.json` نوشته
   می‌شود. خاموش‌کردن: `ofogheamn-dns reality disable`.
+- **پلهٔ ۲ روی نود:** `ofogheamn-dns hysteria2 enable` — ورودی
+  Hysteria2 روی UDP ‏۴۴۳ با همان گواهی TLS نود روشن می‌شود؛ رمز
+  در `/etc/ofogheamn-dns/hysteria2.json` است و نشانی کلاینت:
+  `hysteria2://<رمز>@<سرور>:443/?insecure=1` (با گواهی واقعی،
+  insecure را بردار). خاموش‌کردن: `ofogheamn-dns hysteria2 disable`.
 - **سمت کاربر:** قالب آمادهٔ
   `platforms/common/client-singbox-ladder.json` را با مقادیر همان
   فایل پر کنید. گروه `auto` خودش اندازه می‌گیرد و بهترین پله را

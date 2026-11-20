@@ -1,3 +1,28 @@
+## v1.7 — 2026-11-21 (Hysteria2: the ladder's rung 2 becomes real)
+
+The transport ladder documented Hysteria2/TUIC as rung 2 —
+best loss resilience in the project's own tests — but no node
+could actually enable it: the sing-box generator had no
+Hysteria2 inbound at all. Now it does, built exactly like the
+other opt-in features:
+
+- `ofogheamn-dns hysteria2 enable [port]` writes
+  `hysteria2.json` (default UDP 443, random password, mode
+  600); the generator emits the `ofogh-hysteria2` inbound
+  only while the file exists, using the node's own TLS
+  certificate (the DoT/DoH pair). Optional Salamander obfs
+  via an `obfs_password` field.
+- The firewall guards the port: allowlist chain in private
+  mode, open in public mode — it has real password auth,
+  unlike the no-auth console port, which stays blocked in
+  public mode.
+- The static suite proves it end to end: the generator's
+  output gains the inbound, with the file's port and
+  password, exactly when the file appears.
+- TUIC stays documentation-only for now: it shares QUIC's
+  loss profile with Hysteria2, and one well-tested QUIC rung
+  beats two half-tested ones.
+
 ## v1.6.1 — 2026-11-21 (health depth, installer guidance)
 
 - **Health checks the listeners, not just the units.** A

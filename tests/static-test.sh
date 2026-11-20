@@ -111,6 +111,28 @@ assert "ofogh-console" not in off, "console inbound without console.json"
 assert "ofogh-console" in on, "console inbound missing with console.json"
 EOF
 chk "generator emits console inbound only with console.json" $?
+# Hysteria2 (v1.7): generator, firewall and CLI must agree, and
+# the generator must emit the inbound with the file's port and
+# password — the ladder's rung 2 is a real feature, not a doc.
+has scripts/gen-singbox-config.py 'hysteria2.json'
+chk "generator reads hysteria2.json" $?
+has scripts/gen-singbox-config.py 'ofogh-hysteria2'
+chk "generator emits the ofogh-hysteria2 inbound" $?
+has scripts/ofogheamn-dns 'hysteria2)'
+chk "CLI exposes the hysteria2 command" $?
+has scripts/ofogheamn-firewall.sh 'HY2'
+chk "firewall guards the hysteria2 port" $?
+echo '{"port": 443, "password": "testpass"}' > "$GT/hysteria2.json"
+OFOGH_ETC="$GT" python3 scripts/gen-singbox-config.py >/dev/null 2>&1
+python3 - "$GT" <<'EOF'
+import json, sys
+gt = sys.argv[1]
+inb = {i.get("tag"): i for i in json.load(open(gt + "/singbox.json"))["inbounds"]}
+assert "ofogh-hysteria2" in inb, "hysteria2 inbound missing with hysteria2.json"
+assert inb["ofogh-hysteria2"]["listen_port"] == 443
+assert inb["ofogh-hysteria2"]["users"][0]["password"] == "testpass"
+EOF
+chk "generator emits hysteria2 inbound with hysteria2.json" $?
 rm -rf "$GT"
 # CLI update hardcoded the amd64 sing-box asset (broke ARM nodes).
 hasnot scripts/ofogheamn-dns 'linux-amd64\.tar\.gz'

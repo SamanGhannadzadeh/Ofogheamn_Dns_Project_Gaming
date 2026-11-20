@@ -98,6 +98,33 @@ def main() -> int:
                 },
             },
         })
+    # Optional Hysteria2 inbound (transport ladder rung 2: QUIC +
+    # Brutal congestion control — holds speed on lossy paths where
+    # WireGuard collapses; enabled via `ofogheamn-dns hysteria2
+    # enable`, which writes /etc/ofogheamn-dns/hysteria2.json).
+    # Uses the node's own TLS cert (same pair as DoT/DoH).
+    hy2_file = os.path.join(ETC, "hysteria2.json")
+    hy2_port = None
+    if os.path.exists(hy2_file):
+        with open(hy2_file, encoding="utf-8") as fh:
+            h = json.load(fh)
+        hy2_port = int(h.get("port", 443))
+        hy2 = {
+            "type": "hysteria2",
+            "tag": "ofogh-hysteria2",
+            "listen": "::",
+            "listen_port": hy2_port,
+            "users": [{"password": h["password"]}],
+            "tls": {
+                "enabled": True,
+                "certificate_path": os.path.join(ETC, "tls", "fullchain.pem"),
+                "key_path": os.path.join(ETC, "tls", "privkey.pem"),
+            },
+        }
+        if h.get("obfs_password"):
+            hy2["obfs"] = {"type": "salamander",
+                           "password": h["obfs_password"]}
+        inbounds.append(hy2)
     cfg = {
         "log": {
             "level": "info",
@@ -114,7 +141,8 @@ def main() -> int:
     os.chmod(out, 0o600)
     print(f"singbox.json written: {len(users)} user(s), port {PORT}"
           + (f", console port {console_port} (no auth, firewall-guarded)"
-             if console_port else ""))
+             if console_port else "")
+          + (f", hysteria2 port {hy2_port}" if hy2_port else ""))
     return 0
 
 

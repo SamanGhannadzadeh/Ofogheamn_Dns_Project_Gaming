@@ -279,6 +279,34 @@ PY
         systemctl restart ofogheamn-proxy 2>/dev/null || true; echo "REALITY disabled" ;;
       *) [ -f /etc/ofogheamn-dns/reality.json ] && echo "REALITY: on" || echo "REALITY: off" ;;
     esac ;;
+  hysteria2)
+    shift
+    case "${1:-status}" in
+      enable)
+        need_root
+        command -v sing-box >/dev/null || { echo "sing-box not installed"; exit 1; }
+        HPORT="${2:-443}"
+        PW="$(head -c16 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+        python3 - "$PW" "$HPORT" <<'PY'
+import json, sys, os
+p = "/etc/ofogheamn-dns/hysteria2.json"
+with open(p, "w") as fh: json.dump({"port": int(sys.argv[2]), "password": sys.argv[1]}, fh)
+os.chmod(p, 0o600)
+print("hysteria2 enabled on udp/" + sys.argv[2])
+print("client URI: hysteria2://<password>@<server>:" + sys.argv[2] + "/?insecure=1")
+print("the password is stored in " + p + " (mode 600)")
+PY
+        gen_proxy
+        systemctl restart ofogheamn-proxy 2>/dev/null || true
+        bash /usr/local/bin/ofogheamn-firewall >/dev/null 2>&1 || true ;;
+      disable)
+        need_root; rm -f /etc/ofogheamn-dns/hysteria2.json
+        gen_proxy
+        systemctl restart ofogheamn-proxy 2>/dev/null || true
+        bash /usr/local/bin/ofogheamn-firewall >/dev/null 2>&1 || true
+        echo "Hysteria2 disabled" ;;
+      *) [ -f /etc/ofogheamn-dns/hysteria2.json ] && echo "Hysteria2: on" || echo "Hysteria2: off" ;;
+    esac ;;
   wg)
     shift
     case "${1:-status}" in
