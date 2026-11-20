@@ -181,6 +181,16 @@ def main():
                 listen_ports.append(int(json.load(fh)["port"]))
         except (OSError, ValueError, KeyError):
             problems.append("console-config-bad")
+    # AnyTLS is the only opt-in TCP transport; TUIC and Hysteria2
+    # are UDP and cannot be probed this way (the proxy unit state
+    # above covers them).
+    anytls_file = "/etc/ofogheamn-dns/anytls.json"
+    if os.path.exists(anytls_file):
+        try:
+            with open(anytls_file) as fh:
+                listen_ports.append(int(json.load(fh)["port"]))
+        except (OSError, ValueError, KeyError):
+            problems.append("anytls-config-bad")
     for port in listen_ports:
         if not tcp_open("127.0.0.1", port, timeout=1.0):
             problems.append(f"port-closed-{port}")

@@ -22,6 +22,15 @@
   در `/etc/ofogheamn-dns/hysteria2.json` است و نشانی کلاینت:
   `hysteria2://<رمز>@<سرور>:443/?insecure=1` (با گواهی واقعی،
   insecure را بردار). خاموش‌کردن: `ofogheamn-dns hysteria2 disable`.
+  دو تقویتش: `ofogheamn-dns hysteria2 obfs gecko` (مبهم‌سازی با
+  اندازهٔ بستهٔ تصادفی) و `ofogheamn-dns hysteria2 hop 20000-40000`
+  (پورت‌هاپینگ: کلاینت روی هر پورتی از بازه فرود می‌آید و فایروال
+  همه را به ۴۴۳ می‌رساند؛ سمت کلاینت باید server_ports ست شود).
+- **پلهٔ ۲ موازی (ملایم‌تر):** `ofogheamn-dns tuic enable` —
+  TUIC v5 با BBR و 0-RTT روی UDP ‏۸۴۴۳؛ وقتی Brutal هایستریا
+  زیادی تهاجمی است یا کلاینتت TUIC را بهتر می‌شناسد.
+- **پلهٔ TCP دیگر:** `ofogheamn-dns anytls enable` — AnyTLS روی
+  TCP ‏۸۴۴۳، برای ردشدن از فینگرپرینت TLS-in-TLS.
 - **سمت کاربر:** قالب آمادهٔ
   `platforms/common/client-singbox-ladder.json` را با مقادیر همان
   فایل پر کنید. گروه `auto` خودش اندازه می‌گیرد و بهترین پله را

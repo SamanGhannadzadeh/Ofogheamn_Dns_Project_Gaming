@@ -102,6 +102,42 @@ if [ -n "$HY2" ]; then
   fi
 fi
 
+# Hysteria2 port hopping: a client may land on any UDP port in
+# hop_range; NAT-redirect the whole range to the real port. The
+# INPUT rules above still filter the redirected packets (they
+# arrive with the real port as destination), so private mode
+# keeps its allowlist. Idempotent.
+if [ -n "$HY2" ] && [ -r "$ETC/hysteria2.json" ]; then
+  HOP="$(python3 -c "import json;print(json.load(open('$ETC/hysteria2.json')).get('hop_range',''))" 2>/dev/null || true)"
+  if [ -n "$HOP" ]; then
+    HOPDPT="${HOP%-*}:${HOP#*-}"
+    iptables -t nat -C PREROUTING -p udp --dport "$HOPDPT" -j REDIRECT --to-ports "$HY2" 2>/dev/null \
+      || iptables -t nat -A PREROUTING -p udp --dport "$HOPDPT" -j REDIRECT --to-ports "$HY2"
+    echo "hysteria2 port hopping: udp/$HOP -> $HY2"
+  fi
+fi
+
+# TUIC v5 (UDP) and AnyTLS (TCP): opt-in, password-authenticated,
+# same treatment as Hysteria2 — allowlist in private mode, open
+# in public mode.
+for spec in "tuic.json udp TUIC" "anytls.json tcp AnyTLS"; do
+  set -- $spec
+  if [ -r "$ETC/$1" ]; then
+    P="$(python3 -c "import json;print(json.load(open('$ETC/$1'))['port'])" 2>/dev/null || true)"
+    if [ -n "$P" ]; then
+      if [ "$MODE" = "private" ]; then
+        iptables -C INPUT -p "$2" --dport "$P" -j "$CHAIN" 2>/dev/null \
+          || iptables -I INPUT 1 -p "$2" --dport "$P" -j "$CHAIN"
+        echo "$3 port $P: allowlist only (private)"
+      else
+        iptables -C INPUT -p "$2" --dport "$P" -j ACCEPT 2>/dev/null \
+          || iptables -I INPUT 1 -p "$2" --dport "$P" -j ACCEPT
+        echo "$3 port $P: open (password auth)"
+      fi
+    fi
+  fi
+done
+
 # VPN servers (L2TP/IPsec + PPTP): accept the tunnel ports on INPUT.
 # Idempotent. UDP 1701 is only ever useful inside IPsec (the PSK
 # gate is strongSwan on 500/4500), but xl2tpd binds it plainly, so

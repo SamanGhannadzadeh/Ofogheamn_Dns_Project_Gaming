@@ -1,3 +1,31 @@
+## v1.8 — 2026-11-21 (the full QUIC shelf: TUIC, AnyTLS, Hy2 hopping + Gecko)
+
+Stage 1 of the 2026-11-21 technology survey adoption plan
+(the survey's shortlist, worked through in order):
+
+- **TUIC v5** — `ofogheamn-dns tuic enable` (UDP 8443, BBR
+  congestion control, 0-RTT, node TLS cert). The gentler
+  QUIC rung beside Hysteria2's Brutal.
+- **AnyTLS** — `ofogheamn-dns anytls enable` (TCP 8443, node
+  TLS cert), aimed at the TLS-in-TLS fingerprint. Health now
+  probes its port like the other TCP listeners.
+- **Hysteria2 port hopping** — `ofogheamn-dns hysteria2 hop
+  20000-40000`: the firewall NAT-redirects the whole UDP
+  range to the real port; INPUT filtering still applies
+  after the redirect, so private mode keeps its allowlist.
+- **Hysteria2 Gecko obfs** — `ofogheamn-dns hysteria2 obfs
+  gecko` (randomised packet sizes, sing-box >= 1.14);
+  Salamander remains the fallback.
+- All three new inbounds follow the established opt-in
+  pattern (file in /etc/ofogheamn-dns, generator emits only
+  while present, firewall guards the port, functional tests
+  prove the generator output). Still on the survey plan:
+  stage 2 (Unbound recursive back-end, gaming-only ECS
+  opt-in), stage 3 (AmneziaWG experimental, Xray sidecar
+  evaluation). L2TP/IPsec stays: the survey suggested
+  dropping it, but device compatibility is a project
+  promise and the maintainer's call outranks the survey.
+
 ## v1.7 — 2026-11-21 (Hysteria2: the ladder's rung 2 becomes real)
 
 The transport ladder documented Hysteria2/TUIC as rung 2 —

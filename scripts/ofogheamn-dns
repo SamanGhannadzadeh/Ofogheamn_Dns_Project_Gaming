@@ -305,7 +305,96 @@ PY
         systemctl restart ofogheamn-proxy 2>/dev/null || true
         bash /usr/local/bin/ofogheamn-firewall >/dev/null 2>&1 || true
         echo "Hysteria2 disabled" ;;
+      hop)
+        need_root
+        python3 - "${2:-off}" <<'PY'
+import json, sys, os
+p = "/etc/ofogheamn-dns/hysteria2.json"
+if not os.path.exists(p):
+    print("hysteria2 is not enabled; run: ofogheamn-dns hysteria2 enable"); sys.exit(1)
+cfg = json.load(open(p))
+if sys.argv[1] == "off":
+    cfg.pop("hop_range", None); print("port hopping off")
+else:
+    cfg["hop_range"] = sys.argv[1]
+    print("port hopping on: udp/" + sys.argv[1] + " -> " + str(cfg["port"]))
+json.dump(cfg, open(p, "w"), indent=2); os.chmod(p, 0o600)
+PY
+        bash /usr/local/bin/ofogheamn-firewall >/dev/null 2>&1 || true ;;
+      obfs)
+        need_root
+        python3 - "${2:-gecko}" <<'PY'
+import json, sys, os, secrets
+p = "/etc/ofogheamn-dns/hysteria2.json"
+if not os.path.exists(p):
+    print("hysteria2 is not enabled; run: ofogheamn-dns hysteria2 enable"); sys.exit(1)
+cfg = json.load(open(p))
+if sys.argv[1] == "off":
+    cfg.pop("obfs", None); cfg.pop("obfs_password", None); print("obfs off")
+else:
+    cfg["obfs"] = sys.argv[1]
+    cfg.setdefault("obfs_password", secrets.token_hex(16))
+    print("obfs:", sys.argv[1], "(password in " + p + ")")
+json.dump(cfg, open(p, "w"), indent=2); os.chmod(p, 0o600)
+PY
+        gen_proxy
+        systemctl restart ofogheamn-proxy 2>/dev/null || true ;;
       *) [ -f /etc/ofogheamn-dns/hysteria2.json ] && echo "Hysteria2: on" || echo "Hysteria2: off" ;;
+    esac ;;
+  tuic)
+    shift
+    case "${1:-status}" in
+      enable)
+        need_root
+        command -v sing-box >/dev/null || { echo "sing-box not installed"; exit 1; }
+        TPORT="${2:-8443}"
+        python3 - "$TPORT" <<'PY'
+import json, sys, os, uuid, secrets
+p = "/etc/ofogheamn-dns/tuic.json"
+cfg = {"port": int(sys.argv[1]), "uuid": str(uuid.uuid4()),
+       "password": secrets.token_hex(16)}
+with open(p, "w") as fh: json.dump(cfg, fh, indent=2)
+os.chmod(p, 0o600)
+print("tuic v5 enabled on udp/" + sys.argv[1] + " (BBR, 0-RTT)")
+print("uuid + password are stored in " + p + " (mode 600)")
+PY
+        gen_proxy
+        systemctl restart ofogheamn-proxy 2>/dev/null || true
+        bash /usr/local/bin/ofogheamn-firewall >/dev/null 2>&1 || true ;;
+      disable)
+        need_root; rm -f /etc/ofogheamn-dns/tuic.json
+        gen_proxy
+        systemctl restart ofogheamn-proxy 2>/dev/null || true
+        bash /usr/local/bin/ofogheamn-firewall >/dev/null 2>&1 || true
+        echo "TUIC disabled" ;;
+      *) [ -f /etc/ofogheamn-dns/tuic.json ] && echo "TUIC: on" || echo "TUIC: off" ;;
+    esac ;;
+  anytls)
+    shift
+    case "${1:-status}" in
+      enable)
+        need_root
+        command -v sing-box >/dev/null || { echo "sing-box not installed"; exit 1; }
+        APORT="${2:-8443}"
+        PW="$(head -c16 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+        python3 - "$PW" "$APORT" <<'PY'
+import json, sys, os
+p = "/etc/ofogheamn-dns/anytls.json"
+with open(p, "w") as fh: json.dump({"port": int(sys.argv[2]), "password": sys.argv[1]}, fh)
+os.chmod(p, 0o600)
+print("anytls enabled on tcp/" + sys.argv[2])
+print("the password is stored in " + p + " (mode 600)")
+PY
+        gen_proxy
+        systemctl restart ofogheamn-proxy 2>/dev/null || true
+        bash /usr/local/bin/ofogheamn-firewall >/dev/null 2>&1 || true ;;
+      disable)
+        need_root; rm -f /etc/ofogheamn-dns/anytls.json
+        gen_proxy
+        systemctl restart ofogheamn-proxy 2>/dev/null || true
+        bash /usr/local/bin/ofogheamn-firewall >/dev/null 2>&1 || true
+        echo "AnyTLS disabled" ;;
+      *) [ -f /etc/ofogheamn-dns/anytls.json ] && echo "AnyTLS: on" || echo "AnyTLS: off" ;;
     esac ;;
   wg)
     shift

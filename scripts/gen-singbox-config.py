@@ -122,9 +122,58 @@ def main() -> int:
             },
         }
         if h.get("obfs_password"):
-            hy2["obfs"] = {"type": "salamander",
+            # Gecko (sing-box >= 1.14) randomises packet sizes;
+            # Salamander is the v1.7 default and stays the
+            # fallback when no obfs type is named.
+            hy2["obfs"] = {"type": h.get("obfs", "salamander"),
                            "password": h["obfs_password"]}
         inbounds.append(hy2)
+    # Optional TUIC v5 inbound (the other QUIC rung: gentler
+    # congestion control than Hysteria2's Brutal — BBR here —
+    # plus 0-RTT; enabled via `ofogheamn-dns tuic enable`,
+    # which writes /etc/ofogheamn-dns/tuic.json).
+    tuic_file = os.path.join(ETC, "tuic.json")
+    tuic_port = None
+    if os.path.exists(tuic_file):
+        with open(tuic_file, encoding="utf-8") as fh:
+            t = json.load(fh)
+        tuic_port = int(t.get("port", 8443))
+        inbounds.append({
+            "type": "tuic",
+            "tag": "ofogh-tuic",
+            "listen": "::",
+            "listen_port": tuic_port,
+            "users": [{"uuid": t["uuid"], "password": t["password"]}],
+            "congestion_control": "bbr",
+            "zero_rtt_handshake": True,
+            "tls": {
+                "enabled": True,
+                "certificate_path": os.path.join(ETC, "tls", "fullchain.pem"),
+                "key_path": os.path.join(ETC, "tls", "privkey.pem"),
+            },
+        })
+    # Optional AnyTLS inbound (targets the TLS-in-TLS
+    # fingerprint of nested tunnels; enabled via
+    # `ofogheamn-dns anytls enable`, which writes
+    # /etc/ofogheamn-dns/anytls.json).
+    anytls_file = os.path.join(ETC, "anytls.json")
+    anytls_port = None
+    if os.path.exists(anytls_file):
+        with open(anytls_file, encoding="utf-8") as fh:
+            a = json.load(fh)
+        anytls_port = int(a.get("port", 8443))
+        inbounds.append({
+            "type": "anytls",
+            "tag": "ofogh-anytls",
+            "listen": "::",
+            "listen_port": anytls_port,
+            "users": [{"name": "ofogh", "password": a["password"]}],
+            "tls": {
+                "enabled": True,
+                "certificate_path": os.path.join(ETC, "tls", "fullchain.pem"),
+                "key_path": os.path.join(ETC, "tls", "privkey.pem"),
+            },
+        })
     cfg = {
         "log": {
             "level": "info",
@@ -142,7 +191,9 @@ def main() -> int:
     print(f"singbox.json written: {len(users)} user(s), port {PORT}"
           + (f", console port {console_port} (no auth, firewall-guarded)"
              if console_port else "")
-          + (f", hysteria2 port {hy2_port}" if hy2_port else ""))
+          + (f", hysteria2 port {hy2_port}" if hy2_port else "")
+          + (f", tuic port {tuic_port}" if tuic_port else "")
+          + (f", anytls port {anytls_port}" if anytls_port else ""))
     return 0
 
 

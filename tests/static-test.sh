@@ -133,6 +133,35 @@ assert inb["ofogh-hysteria2"]["listen_port"] == 443
 assert inb["ofogh-hysteria2"]["users"][0]["password"] == "testpass"
 EOF
 chk "generator emits hysteria2 inbound with hysteria2.json" $?
+# TUIC v5 + AnyTLS + Hysteria2 Gecko (v1.8): same opt-in pattern.
+has scripts/gen-singbox-config.py 'tuic.json'
+chk "generator reads tuic.json" $?
+has scripts/gen-singbox-config.py 'ofogh-tuic'
+chk "generator emits the ofogh-tuic inbound" $?
+has scripts/gen-singbox-config.py 'anytls.json'
+chk "generator reads anytls.json" $?
+has scripts/gen-singbox-config.py 'ofogh-anytls'
+chk "generator emits the ofogh-anytls inbound" $?
+has scripts/ofogheamn-dns 'tuic)'
+chk "CLI exposes the tuic command" $?
+has scripts/ofogheamn-dns 'anytls)'
+chk "CLI exposes the anytls command" $?
+has scripts/ofogheamn-firewall.sh 'hop_range'
+chk "firewall implements hysteria2 port hopping" $?
+echo '{"port": 8443, "uuid": "11111111-2222-3333-4444-555555555555", "password": "tuicpass"}' > "$GT/tuic.json"
+echo '{"port": 8443, "password": "anypass"}' > "$GT/anytls.json"
+echo '{"port": 443, "password": "testpass", "obfs": "gecko", "obfs_password": "obfspass"}' > "$GT/hysteria2.json"
+OFOGH_ETC="$GT" python3 scripts/gen-singbox-config.py >/dev/null 2>&1
+python3 - "$GT" <<'EOF'
+import json, sys
+gt = sys.argv[1]
+inb = {i.get("tag"): i for i in json.load(open(gt + "/singbox.json"))["inbounds"]}
+assert inb["ofogh-tuic"]["congestion_control"] == "bbr", "tuic must use bbr"
+assert inb["ofogh-tuic"]["users"][0]["password"] == "tuicpass"
+assert inb["ofogh-anytls"]["users"][0]["password"] == "anypass"
+assert inb["ofogh-hysteria2"]["obfs"]["type"] == "gecko", "gecko obfs not emitted"
+EOF
+chk "generator emits tuic, anytls and gecko obfs from their files" $?
 rm -rf "$GT"
 # CLI update hardcoded the amd64 sing-box asset (broke ARM nodes).
 hasnot scripts/ofogheamn-dns 'linux-amd64\.tar\.gz'

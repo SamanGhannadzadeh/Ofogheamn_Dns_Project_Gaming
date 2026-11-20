@@ -115,7 +115,7 @@ ofogheamn-dns proxy users
 
 **پایش آپ‌استریم:** چک سلامت (`ofogheamn-dns health`) حالا زنده‌بودن تک‌تک آپ‌استریم‌های کانفیگ را هم می‌سنجد و مرده‌ها را با نام گزارش می‌کند — آپ‌استریم مردهٔ بی‌صدا دیگر هر لوک‌آپ سرد را معطل نمی‌کند.
 
-**همهٔ فرمان‌های `ofogheamn-dns`:** `status`، `start`، `stop`، `restart`، `logs`، `health`، `test`، `mode`، `allow`، `proxy`، `console`، `reality`، `hysteria2`، `vpn`، `wg`، `mesh`، `panel`، `panel-password`، `game`، `add-game`، `remove-game`، `list-games`، `cod`، `cod-test`، `warmup`، `add-hijack`، `remove-hijack`، `list-hijack`، `bench`، `region`، `firewall`، `backup`، `restore`، `update`، `menu`
+**همهٔ فرمان‌های `ofogheamn-dns`:** `status`، `start`، `stop`، `restart`، `logs`، `health`، `test`، `mode`، `allow`، `proxy`، `console`، `reality`، `hysteria2`، `tuic`، `anytls`، `vpn`، `wg`، `mesh`، `panel`، `panel-password`، `game`، `add-game`، `remove-game`، `list-games`، `cod`، `cod-test`، `warmup`، `add-hijack`، `remove-hijack`، `list-hijack`، `bench`، `region`، `firewall`، `backup`، `restore`، `update`، `menu`
 
 ## تونل گیمینگ — دستگاه ← سرور تو ← بازی | Gaming tunnel
 
