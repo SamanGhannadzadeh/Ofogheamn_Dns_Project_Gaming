@@ -71,8 +71,16 @@ foreach ($r in @(
 
 # ---------- services / tasks ----------
 Push-Location $Root
+# Windows PowerShell 5.1 turns a native exe's stderr output into a
+# terminating NativeCommandError while $ErrorActionPreference is
+# "Stop" — and AdGuard Home logs its normal startup line to stderr
+# even on success, which killed the install right here. Relax the
+# preference around these two calls only.
+$prevEAP = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
 & .\AdGuardHome.exe -s install -c "$Data\AdGuardHome.yaml" -w $Data 2>$null
 & .\AdGuardHome.exe -s start 2>$null
+$ErrorActionPreference = $prevEAP
 Pop-Location
 $action = New-ScheduledTaskAction -Execute "$Root\sing-box.exe" -Argument "run -c `"$Data\proxy.json`""
 $trigger = New-ScheduledTaskTrigger -AtStartup
