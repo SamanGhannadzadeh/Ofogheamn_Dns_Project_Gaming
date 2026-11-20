@@ -21,7 +21,12 @@ echo "blocklist candidates: $COUNT"
 {
   sed '/^# --- managed blocklist begin/,/^# --- managed blocklist end/d' "$FILE" 2>/dev/null
   echo "# --- managed blocklist begin (update-blocklist.sh; do not edit) ---"
-  sed 's#.*#address /&/#' "$TMP.rules"
+  # The "#" answer form is load-bearing: it is the only form the
+  # real SmartDNS (Release48.5) answers locally with NXDOMAIN and
+  # zero answers. The empty form (address /domain/) is parsed but
+  # never answered locally — it silently turned this whole list
+  # into a no-op (v1.4 fix, proven against the real binary).
+  sed 's|.*|address /&/#|' "$TMP.rules"
   echo "# --- managed blocklist end ---"
 } > "$FILE.new" && mv "$FILE.new" "$FILE"
 echo "blocklist updated: $COUNT domains"

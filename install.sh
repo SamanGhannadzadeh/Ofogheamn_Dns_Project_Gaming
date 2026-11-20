@@ -34,6 +34,13 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get install -y -qq curl ca-certificates openssl dnsutils iproute2 >/dev/null
 
+# Public IP, detected once here: the WireGuard server config
+# (below) already needs it as the client endpoint. It used to be
+# computed only at the final banner, and the wg block's
+# ${OFOGH_WG_ENDPOINT:-$PUBIP} then crashed fresh installs with
+# "PUBIP: unbound variable" under set -u (v1.4 fix).
+PUBIP="$(curl -s --max-time 5 https://ifconfig.me || hostname -I | awk '{print $1}')"
+
 # If we were piped in (no repo files next to us), fetch the project.
 if [ ! -f "$SRC_DIR/config/smartdns.conf" ]; then
   say "fetching project files"
@@ -243,16 +250,40 @@ if command -v ufw >/dev/null && ufw status | grep -q "Status: active"; then
 fi
 
 sleep 2
+# ---------- self-verification (v1.4): report, don't assume ----------
+# The installer used to end with two bare digs and an unconditional
+# "is up" banner. Now every piece reports PASS/FAIL and the banner
+# only claims success the checks actually saw.
 say "self-test"
-dig +short +time=3 +tries=1 @127.0.0.1 callofduty.com A | head -3 || true
+FAIL=0
+chk_svc() { # unit required(0/1)
+  if systemctl is-active --quiet "$1"; then echo "  PASS  service $1 active"
+  elif [ "${2:-0}" = "1" ]; then echo "  FAIL  service $1 NOT active"; FAIL=1
+  else echo "  --    service $1 not started (optional/not installed)"; fi
+}
+chk_svc ofogheamn-dns 1
+[ "$LITE" != "1" ] && chk_svc ofogheamn-panel 0
+[ -x /usr/local/bin/sing-box ] && chk_svc ofogheamn-proxy 0
+[ -f "$ETC/wg0.conf" ] && chk_svc ofogheamn-wg 0
+ANS="$(dig +short +time=3 +tries=1 @127.0.0.1 callofduty.com A 2>/dev/null | head -1)"
+if [ -n "$ANS" ]; then echo "  PASS  DNS answers locally (callofduty.com -> $ANS)"
+else echo "  FAIL  DNS does not answer on 127.0.0.1:53"; FAIL=1; fi
 dig +short +time=3 +tries=1 @127.0.0.1 store.steampowered.com A | head -3 || true
+if [ "$FAIL" = "0" ]; then echo "SELF-TEST: PASS"
+else
+  echo "SELF-TEST: FAIL — the node is installed but not fully up."
+  echo "  Most common cause: systemd-resolved holds port 53. Fix:"
+  echo "    sed -i 's/^#DNSStubListener=.*/DNSStubListener=no/' /etc/systemd/resolved.conf"
+  echo "    systemctl restart systemd-resolved ofogheamn-dns"
+  echo "  Logs: /var/log/ofogheamn-dns/smartdns.log · journalctl -u ofogheamn-dns"
+fi
 
-PUBIP="$(curl -s --max-time 5 https://ifconfig.me || hostname -I | awk '{print $1}')"
 if [ "$LITE" = "1" ]; then PANEL_LINE="(Lite — no web panel; manage with the ofogheamn-dns CLI)"; else PANEL_LINE="http://$PUBIP:8080"; fi
+if [ "$FAIL" = "0" ]; then UP_LINE="Ofogheamn DNS is up."; else UP_LINE="Ofogheamn DNS installed — SELF-TEST FAILED (see above)."; fi
 cat <<EOF
 
 ============================================================
- Ofogheamn DNS is up.  Server: $PUBIP
+ $UP_LINE  Server: $PUBIP
    Plain DNS : $PUBIP  (UDP/TCP 53)         <- PS5, Xbox, router
    DoT       : $HOSTNAME_DNS : 853          <- Android Private DNS
    DoH       : https://$HOSTNAME_DNS/dns-query

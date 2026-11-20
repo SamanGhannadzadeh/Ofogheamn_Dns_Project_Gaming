@@ -12,7 +12,7 @@
 set -e
 DNS_SERVER="${DNS_SERVER:?set DNS_SERVER to the Ofogheamn DNS server IP}"
 LAN_NET="${LAN_NET:?set LAN_NET, e.g. 192.168.1.0/24}"
-add() { iptables -t "$1" -C "${@:2}" 2>/dev/null || iptables -t "$1" "${@:2}"; }
+add() { local t="$1"; shift; iptables -t "$t" -C "$@" 2>/dev/null || iptables -t "$t" -A "$@"; }
 
 for proto in udp tcp; do
   add nat PREROUTING -s "$LAN_NET" ! -d "$DNS_SERVER" -p "$proto" --dport 53 -j DNAT --to-destination "$DNS_SERVER":53

@@ -9,9 +9,9 @@ bash platforms/macos/install.sh
 ```
 
 - پنل مدیریت DNS: ‏`http://localhost:3000` (اولین ورود: ساخت کاربر مدیر)
-- DNS روی IP همین مک: پورت 53 و DoT روی 853
+- DNS روی IP همین مک: پورت 53 (UDP و TCP). ‏DoT/DoH به‌صورت پیش‌فرض سرو نمی‌شود؛ از پنل AdGuard Home در Settings ← Encryption با یک گواهی می‌توانی روشنش کنی.
 - پروکسی: پورت 2080 با کاربر `ofogh` (رمز در خروجی نصب و در `/usr/local/etc/ofogheamn/proxy.json`)
-- حذف: `bash platforms/macos/server/uninstall.sh`
+- حذف: `bash platforms/macos/uninstall.sh`
 
 ## تفاوت با نسخهٔ لینوکس (صادقانه)
 

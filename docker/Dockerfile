@@ -8,12 +8,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       curl ca-certificates openssl dnsutils python3 procps \
       wireguard-tools iproute2 iptables \
     && rm -rf /var/lib/apt/lists/*
+COPY docker/verify-download.py /tmp/verify-download.py
 RUN case "$(uname -m)" in x86_64) A=x86_64; SA=amd64 ;; aarch64) A=aarch64; SA=arm64 ;; esac \
     && curl -fsSL -o /usr/local/bin/smartdns \
        "https://github.com/pymumu/smartdns/releases/download/${SMARTDNS_TAG}/smartdns-${A}" \
     && chmod 755 /usr/local/bin/smartdns \
-    && curl -fsSL "https://github.com/SagerNet/sing-box/releases/download/${SINGBOX_TAG}/sing-box-${SINGBOX_TAG#v}-linux-${SA}.tar.gz" \
-       | tar -xz -C /tmp \
+    && python3 /tmp/verify-download.py pymumu/smartdns "${SMARTDNS_TAG}" "smartdns-${A}" /usr/local/bin/smartdns \
+    && curl -fsSL -o /tmp/sing-box.tar.gz \
+       "https://github.com/SagerNet/sing-box/releases/download/${SINGBOX_TAG}/sing-box-${SINGBOX_TAG#v}-linux-${SA}.tar.gz" \
+    && python3 /tmp/verify-download.py SagerNet/sing-box "${SINGBOX_TAG}" "sing-box-${SINGBOX_TAG#v}-linux-${SA}.tar.gz" /tmp/sing-box.tar.gz \
+    && tar -xzf /tmp/sing-box.tar.gz -C /tmp \
     && install -m 755 "/tmp/sing-box-${SINGBOX_TAG#v}-linux-${SA}/sing-box" /usr/local/bin/sing-box
 COPY config/ /opt/ofogheamn/config/
 COPY scripts/ /opt/ofogheamn/scripts/

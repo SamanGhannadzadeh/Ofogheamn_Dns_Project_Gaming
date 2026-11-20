@@ -19,7 +19,14 @@ add bridge=bridge-containers interface=veth-ofogh
 /ip firewall nat
 add chain=srcnat src-address=172.17.0.0/24 action=masquerade comment="Ofogheamn container NAT"
 
-# 2) Pull and create the container (Docker Hub image built from
+# 2) Environment list FIRST: the container below references it
+#    by name, and RouterOS resolves envlist when the container
+#    is added. Optional fixed credentials go here too (otherwise
+#    random ones print in the container log on first start).
+/container envs
+add name=ofogh-env key=OFOGH_DNS_HOSTNAME value=dns.ofogheamn.ir
+
+# 3) Pull and create the container (Docker Hub image built from
 #    this repo's docker/ folder; or load the tar via file upload)
 /container
 add remote-image=ofogheamn-dns:latest interface=veth-ofogh \
@@ -27,12 +34,7 @@ add remote-image=ofogheamn-dns:latest interface=veth-ofogh \
     envlist=ofogh-env logging=yes name=ofogheamn-dns \
     comment="Ofogheamn DNS + proxy + panel"
 
-# Optional fixed credentials (otherwise random ones print in the
-# container log on first start):
-/container envs
-add name=ofogh-env key=OFOGH_DNS_HOSTNAME value=dns.ofogheamn.ir
-
-# 3) Publish the container ports to the LAN: put the container
+# 4) Publish the container ports to the LAN: put the container
 #    bridge in the LAN path or dst-nat the service ports from
 #    the router's LAN address to 172.17.0.2 — example for DNS:
 /ip firewall nat
@@ -41,7 +43,7 @@ add chain=dstnat dst-address=192.168.1.1 protocol=udp dst-port=53 \
 add chain=dstnat dst-address=192.168.1.1 protocol=tcp dst-port=53 \
     action=dst-nat to-addresses=172.17.0.2 to-ports=53 comment="Ofogheamn DNS in"
 
-# 4) Start it
+# 5) Start it
 /container start ofogheamn-dns
 
 # Then point DHCP (option 6) at the router/container and apply

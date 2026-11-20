@@ -25,12 +25,18 @@ done
 if [ "$MODE" = "public" ]; then
   # Public-resolver abuse guard: per-source rate limit on the
   # plain DNS ports (open resolvers are amplification targets).
+  # hashlimit (--hashlimit = --hashlimit-upto) matches packets that
+  # are WITHIN the rate, so the construction is: within-limit ->
+  # RETURN (carry on to INPUT's policy), anything past the limit
+  # falls through to the DROP below. The intuitive "-j DROP" on
+  # the hashlimit line itself does the exact opposite — it drops
+  # every well-behaved client and lets floods through (verified
+  # against the iptables-extensions man page; v1.4 fix).
   for proto in udp tcp; do
-    for port in 53; do
-      iptables -A "$CHAIN" -p "$proto" --dport "$port" -m hashlimit \
-        --hashlimit-name "ofogh_dns_$proto" --hashlimit 120/second \
-        --hashlimit-burst 240 --hashlimit-mode srcip -j DROP
-    done
+    iptables -A "$CHAIN" -p "$proto" --dport 53 -m hashlimit \
+      --hashlimit-name "ofogh_dns_$proto" --hashlimit 120/second \
+      --hashlimit-burst 240 --hashlimit-mode srcip -j RETURN
+    iptables -A "$CHAIN" -p "$proto" --dport 53 -j DROP
   done
 fi
 

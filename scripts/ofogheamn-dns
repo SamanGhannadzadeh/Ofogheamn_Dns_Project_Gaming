@@ -16,7 +16,33 @@ ETC=/etc/ofogheamn-dns
 SVC=ofogheamn-dns
 if [ -t 1 ]; then B=$'\033[1m'; G=$'\033[32m'; C=$'\033[36m'; R=$'\033[31m'; N=$'\033[0m'; else B=; G=; C=; R=; N=; fi
 need_root() { [ "$(id -u)" = "0" ] || { echo "${R}run with sudo${N}"; exit 1; }; }
-state() { systemctl is-active "$1" 2>/dev/null || echo unknown; }
+state() { local s; s="$(systemctl is-active "$1" 2>/dev/null || true)"; echo "${s:-unknown}"; }
+# grep -c prints the count AND exits 1 on zero matches, so the
+# "$(grep -c ... || echo 0)" idiom printed "0\n0" (v1.4 fix).
+cnt() { local n; n="$(grep "$@" 2>/dev/null || true)"; printf '%s' "${n:-0}"; }
+# Download integrity, same policy as install.sh: verify against
+# the SHA-256 digest GitHub records for the release asset.
+verify_digest() { # repo tag asset file
+  local want got
+  want="$(curl -fsSL --max-time 30 "https://api.github.com/repos/$1/releases/tags/$2" 2>/dev/null \
+    | python3 -c 'import json,sys
+try:
+    d = json.load(sys.stdin)
+    a = [x for x in d.get("assets", []) if x["name"] == sys.argv[1]]
+    print((a[0].get("digest") or "").replace("sha256:", "") if a else "")
+except Exception:
+    print("")' "$3" 2>/dev/null)"
+  if [ -z "$want" ]; then
+    echo "WARNING: could not fetch the official digest for $3; installing unverified"
+    return 0
+  fi
+  got="$(sha256sum "$4" | awk '{print $1}')"
+  if [ "$got" != "$want" ]; then
+    echo "SECURITY ABORT: sha256 mismatch for $3 (got $got, want $want)" >&2
+    return 1
+  fi
+  echo "digest verified: $3"
+}
 get_mode() { grep -E '^mode=' "$ETC/mode.conf" 2>/dev/null | cut -d= -f2; }
 reload_dns() { systemctl restart "$SVC" && echo "${G}DNS reloaded${N}"; }
 gen_proxy() { OFOGH_ETC="$ETC" python3 /usr/local/lib/ofogheamn-dns/gen-singbox-config.py; }
@@ -30,8 +56,8 @@ cmd_status() {
   echo " Panel       : $(state ofogheamn-panel)   (http://<server>:8080)"
   echo " Cache warmer: $(state cod-warmup.timer)   (CoD/gaming lists, every 4 min)"
   echo " Mode        : ${B}$(get_mode)${N}"
-  echo " Hijack rules: $(grep -cE '^(address|cname) ' "$ETC/hijack.conf" 2>/dev/null || echo 0)"
-  echo " CoD domains : $(grep -cvE '^\s*(#|$)' "$ETC/lists/cod.domains" 2>/dev/null || echo 0)   Gaming domains: $(grep -cvE '^\s*(#|$)' "$ETC/lists/gaming.domains" 2>/dev/null || echo 0)"
+  echo " Hijack rules: $(cnt -cE '^(address|cname) ' "$ETC/hijack.conf")"
+  echo " CoD domains : $(cnt -cvE '^\s*(#|$)' "$ETC/lists/cod.domains")   Gaming domains: $(cnt -cvE '^\s*(#|$)' "$ETC/lists/gaming.domains")"
   echo " Proxy users : $(python3 -c "import json;print(', '.join(u['user'] for u in json.load(open('$ETC/proxy-users.json'))))" 2>/dev/null || echo -)"
 }
 
@@ -68,6 +94,7 @@ cmd_proxy() {
     users) python3 -c "import json;[print(u['user']) for u in json.load(open('$ETC/proxy-users.json'))]" 2>/dev/null || echo "(none)" ;;
     add-user)
       need_root
+      [ -n "${2:-}" ] && [ -n "${3:-}" ] || { echo "usage: ofogheamn-dns proxy add-user <user> <pass>"; return 64; }
       python3 - "$2" "$3" <<'PY'
 import json, sys
 p = "/etc/ofogheamn-dns/proxy-users.json"
@@ -81,6 +108,7 @@ PY
       gen_proxy; systemctl restart ofogheamn-proxy && echo "${G}proxy reloaded${N}" ;;
     del-user)
       need_root
+      [ -n "${2:-}" ] || { echo "usage: ofogheamn-dns proxy del-user <user>"; return 64; }
       python3 - "$2" <<'PY'
 import json, sys
 p = "/etc/ofogheamn-dns/proxy-users.json"
@@ -167,6 +195,7 @@ case "${1:-menu}" in
   panel) echo "Panel: http://$(hostname -I | awk '{print $1}'):8080  (state: $(state ofogheamn-panel))" ;;
   panel-password)
     need_root
+    [ -n "${2:-}" ] || { echo "usage: ofogheamn-dns panel-password <new>"; exit 64; }
     python3 - "$2" <<'PY'
 import hashlib, sys
 h = hashlib.sha256(sys.argv[1].encode()).hexdigest()
@@ -227,9 +256,9 @@ PY
     shift
     case "${1:-status}" in
       status) wg show wg0 2>/dev/null || echo "tunnel wg0 is down" ;;
-      add-peer) need_root; ofogheamn-wg-peer add "$2"; systemctl restart ofogheamn-wg && echo "${G}tunnel reloaded — send the config above to the device${N}" ;;
+      add-peer) need_root; [ -n "${2:-}" ] || { echo "usage: ofogheamn-dns wg add-peer <name>"; exit 64; }; ofogheamn-wg-peer add "$2"; systemctl restart ofogheamn-wg && echo "${G}tunnel reloaded — send the config above to the device${N}" ;;
       peers) ofogheamn-wg-peer list ;;
-      del-peer) need_root; ofogheamn-wg-peer remove "$2"; systemctl restart ofogheamn-wg && echo ok ;;
+      del-peer) need_root; [ -n "${2:-}" ] || { echo "usage: ofogheamn-dns wg del-peer <name>"; exit 64; }; ofogheamn-wg-peer remove "$2"; systemctl restart ofogheamn-wg && echo ok ;;
       restart) need_root; systemctl restart ofogheamn-wg && echo ok ;;
       *) echo "usage: ofogheamn-dns wg status|add-peer <name>|peers|del-peer <name>|restart" ;;
     esac ;;
@@ -285,7 +314,10 @@ PYEOF
   restart) need_root; reload_dns ;;
   start) need_root; systemctl start "$SVC" ;;
   stop) need_root; systemctl stop "$SVC" ;;
-  logs) tail -n "${3:-50}" "/var/log/ofogheamn-dns/${2:-smartdns}.log" 2>/dev/null || tail -n "${3:-50}" /var/log/ofogheamn-dns/smartdns.log ;;
+  logs) case "${2:-dns}" in
+          dns) lf=smartdns ;; proxy) lf=singbox ;; *) lf="${2:-smartdns}" ;;
+        esac
+        tail -n "${3:-50}" "/var/log/ofogheamn-dns/$lf.log" 2>/dev/null || tail -n "${3:-50}" /var/log/ofogheamn-dns/smartdns.log ;;
   add-hijack)
     need_root
     [ -n "${2:-}" ] && [ -n "${3:-}" ] || { echo "usage: ofogheamn-dns add-hijack <domain> <ipv4>"; exit 64; }
@@ -317,14 +349,29 @@ PYEOF
   update)
     need_root
     TAG="$(curl -sIL -o /dev/null -w '%{url_effective}' https://github.com/pymumu/smartdns/releases/latest | sed 's#.*/tag/##')"
-    case "$(uname -m)" in x86_64) A=x86_64 ;; aarch64|arm64) A=aarch64 ;; esac
+    [ -n "$TAG" ] || { echo "could not determine the latest SmartDNS release (network?)"; exit 1; }
+    case "$(uname -m)" in
+      x86_64) A=x86_64; SB_ARCH=amd64 ;;
+      aarch64|arm64) A=aarch64; SB_ARCH=arm64 ;;
+      *) echo "unsupported arch: $(uname -m)"; exit 1 ;;
+    esac
     echo "updating SmartDNS core -> $TAG"
     curl -fsSL -o /usr/local/bin/smartdns.new "https://github.com/pymumu/smartdns/releases/download/$TAG/smartdns-$A" \
-      && chmod 755 /usr/local/bin/smartdns.new && mv /usr/local/bin/smartdns.new /usr/local/bin/smartdns
+      && verify_digest "pymumu/smartdns" "$TAG" "smartdns-$A" /usr/local/bin/smartdns.new \
+      && chmod 755 /usr/local/bin/smartdns.new && mv /usr/local/bin/smartdns.new /usr/local/bin/smartdns \
+      || { rm -f /usr/local/bin/smartdns.new; echo "SmartDNS update failed; keeping the current core"; exit 1; }
     STAG="$(curl -sIL -o /dev/null -w '%{url_effective}' https://github.com/SagerNet/sing-box/releases/latest | sed 's#.*/tag/##')"
+    [ -n "$STAG" ] || { echo "could not determine the latest sing-box release (network?)"; exit 1; }
     echo "updating sing-box -> $STAG"
-    curl -fsSL "https://github.com/SagerNet/sing-box/releases/download/$STAG/sing-box-${STAG#v}-linux-amd64.tar.gz" \
-      | tar -xz -C /tmp && install -m 755 "/tmp/sing-box-${STAG#v}-linux-amd64/sing-box" /usr/local/bin/sing-box
+    # The asset name is arch-specific: this used to hardcode
+    # linux-amd64 and install an x86_64 proxy on ARM nodes, and
+    # updates were never digest-checked (v1.4 fixes).
+    curl -fsSL -o /tmp/sing-box-update.tar.gz "https://github.com/SagerNet/sing-box/releases/download/$STAG/sing-box-${STAG#v}-linux-$SB_ARCH.tar.gz" \
+      && verify_digest "SagerNet/sing-box" "$STAG" "sing-box-${STAG#v}-linux-$SB_ARCH.tar.gz" /tmp/sing-box-update.tar.gz \
+      && tar -xzf /tmp/sing-box-update.tar.gz -C /tmp \
+      && install -m 755 "/tmp/sing-box-${STAG#v}-linux-$SB_ARCH/sing-box" /usr/local/bin/sing-box \
+      || { echo "sing-box update failed; keeping the current proxy"; exit 1; }
+    rm -f /tmp/sing-box-update.tar.gz
     reload_dns; systemctl restart ofogheamn-proxy ;;
   *) sed -n '2,12p' "$0" ;;
 esac

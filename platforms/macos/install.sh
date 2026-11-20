@@ -8,7 +8,7 @@ AGH_VER="v0.107.80"
 SINGBOX_VER="1.14.4"
 ROOT="/opt/ofogheamn"
 DATA="/usr/local/etc/ofogheamn"
-REPO_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 ARCH="$(uname -m)"
 [ "$ARCH" = "arm64" ] && AGH_ARCH="arm64" || AGH_ARCH="amd64"
 [ "$ARCH" = "arm64" ] && SB_ARCH="arm64" || SB_ARCH="amd64"
@@ -85,8 +85,26 @@ sudo tee /Library/LaunchDaemons/ir.ofogheamn.proxy.plist >/dev/null <<EOF
 EOF
 sudo launchctl load -w /Library/LaunchDaemons/ir.ofogheamn.proxy.plist 2>/dev/null || true
 
+# ---------- self-verification (v1.4): report, don't assume ----------
 echo ""
-echo "DONE. Ofogheamn DNS node is running on this Mac."
-echo " DNS (this Mac's IP): port 53 (UDP/TCP), DoT 853"
+echo "Self-test:"
+FAIL=0
+sleep 2
+if dig +short +time=3 +tries=1 @127.0.0.1 example.com A 2>/dev/null | grep -q .; then
+  echo "  PASS  DNS answers on 127.0.0.1:53"
+else
+  echo "  FAIL  DNS does not answer on 127.0.0.1:53"; FAIL=1
+fi
+if nc -z 127.0.0.1 2080 2>/dev/null; then
+  echo "  PASS  proxy is listening on 2080"
+else
+  echo "  FAIL  proxy is NOT listening on 2080"; FAIL=1
+fi
+if [ "$FAIL" = "0" ]; then echo "SELF-TEST: PASS"; else echo "SELF-TEST: FAIL - installed, but not fully up (see FAIL lines)."; fi
+
+echo ""
+if [ "$FAIL" = "0" ]; then echo "DONE. Ofogheamn DNS node is running on this Mac."; else echo "INSTALLED WITH PROBLEMS. Ofogheamn DNS node is not fully up on this Mac."; fi
+echo " DNS (this Mac's IP): port 53 (UDP/TCP)"
+echo " DoT/DoH: not served by default - enable it in the AdGuard Home panel (Settings -> Encryption) with a certificate."
 if [ "${OFOGH_LITE:-0}" = "1" ]; then echo " LITE edition: no exposed panel - AGH UI on localhost:3000 only."; else echo " AdGuard Home panel:  http://localhost:3000  (first visit: create the admin user)"; fi
 echo " Proxy:               <this Mac IP>:2080  user ofogh (password in $DATA/proxy.json)"

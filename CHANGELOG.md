@@ -1,3 +1,128 @@
+## v1.4 — 2026-11-20 (debug + polish round)
+
+Every installer and entry point audited as a first-time user
+hits it; bugs proven against the real SmartDNS binary where
+possible; a regression suite added so this bug class stays
+fixed (`tests/static-test.sh`, 52 checks, incl. running the
+shipped config on the real core). (v1.3.1/v1.3.2 were the two
+Windows first-run fixes, shipped the same day.)
+
+### Critical fixes (first-run killers)
+- **install.sh crashed mid-install on fresh servers.**
+  `PUBIP` was first computed *after* the WireGuard block that
+  uses it — under `set -u` the install died with "PUBIP:
+  unbound variable" on any machine with WireGuard available.
+  The public IP is now resolved once, before first use.
+- **The managed blocklist blocked nothing.** The generator
+  emitted `address /domain/` (empty answer form); proven
+  against the real SmartDNS binary: the empty form is parsed
+  but never answered locally, so ~90k rules were a no-op. The
+  generator now emits `address /domain/#`, the only form that
+  answers locally (NXDOMAIN, zero answers). Existing nodes pick
+  this up on the next blocklist update.
+- **Public-mode firewall rule was inverted.** The hashlimit
+  rule targeted DROP; `--hashlimit` matches traffic *at or
+  below* the limit, so the node dropped every well-behaved
+  client and passed floods. Under-limit traffic now RETURNs
+  and only the excess is dropped.
+- **Docker nodes could never start.** `smartdns.conf` includes
+  `mesh-upstream.conf`; a missing include is fatal (proven),
+  and the entrypoint never seeded it. It does now. The image
+  build also verifies both binary downloads against GitHub's
+  recorded SHA-256 digests now, like every other installer.
+- **OpenWrt nodes could never start.** The installer never
+  downloaded `mesh-upstream.conf` (same fatal include) and
+  never created the TLS certificates (missing certs are also
+  fatal — SmartDNS does not auto-generate them). Both are now
+  provided; the stock `smartdns` UCI service is disabled so it
+  stops fighting the project instance for port 53, and the
+  DHCP-advertised DNS is the router's real LAN address instead
+  of a hardcoded 192.168.1.1.
+- **gateway/redirect-53.sh added no rules at all.** Its `add`
+  helper ran the existence-check argv on the append path (no
+  `-A`), so every rule failed and the script died under
+  `set -e`. Fixed and verified with a stub iptables.
+- **macOS installer looked for its templates one directory too
+  high** (`REPO_ROOT` `../../..` — the Windows v1.3.1 bug,
+  twin copy) and died on first run. Now `../..`.
+- **Windows installer printed a proxy password that did not
+  work.** Every run minted a new password but only wrote
+  `proxy.json` when missing — a re-run printed a password that
+  was not the stored one. The password is now generated and
+  printed only when the file is created, like the Linux
+  installer. Also: TLS 1.2 is pinned for downloads (PS 5.1 on
+  older .NET failed every GitHub download), generated
+  JSON/YAML is written BOM-free (PS 5.1's UTF8 BOM breaks Go
+  parsers), downloads are digest-verified like the Linux
+  installer, and a missing project template fails with a clear
+  message instead of a raw `Get-Content` crash.
+  `uninstall.ps1` no longer errors when the install folder is
+  already gone.
+
+### First-run feedback (installers verify themselves)
+- **Linux install.sh** replaces the bare `dig` probe with a
+  per-service PASS/FAIL self-test, a real DNS answer check,
+  and an explicit `SELF-TEST: PASS/FAIL` verdict; the banner
+  no longer claims "is up" when the test failed, and the
+  common port-53 cause (systemd-resolved) is hinted.
+- **Windows and macOS installers** gained the same treatment:
+  service state, a live DNS answer, and the proxy port are
+  checked and reported instead of an unconditional "DONE".
+
+### Panel / CLI / health
+- **Panel proxy edits silently dropped REALITY.** Saving proxy
+  settings from the panel rewrote `singbox.json` by hand and
+  lost the VLESS+REALITY inbound enabled via the CLI. The
+  panel now regenerates through `gen-singbox-config.py`, the
+  documented single source of truth.
+- **Panel hijack API** misclassified IPv6 targets starting with
+  a hex letter (or `::`) as hostnames and wrote corrupt cname
+  rules; classification now parses the target as an IP.
+- **CLI `update`** downloaded the amd64 sing-box build on ARM
+  nodes (now arch-aware, like install.sh), verified no
+  digests (now verified, like install.sh), and could proceed
+  with an empty release tag. `logs proxy` tailed a log file
+  that never exists (now `singbox.log`). Status output no
+  longer prints `unknown` under `inactive` or `0\n0` counts.
+  Missing arguments to `panel-password`, `proxy add/del-user`
+  and `wg add/del-peer` print usage instead of a raw
+  "unbound variable" crash.
+- **Health check** no longer counts the panel (or proxy) as
+  core on nodes that never had one — Lite installs showed a
+  permanently "unhealthy" panel and the watchdog restarted
+  healthy services every 5 minutes.
+- **cod-warmup** could print `0\n0` as the gaming-domain total
+  on an all-comments list file.
+
+### Uninstall completeness (Linux)
+- Removes two orphans: `update-blocklist` (never removed) and
+  `ofogheamn-wg-peer` (the list used a `.py` name that was
+  never installed). Disables `ofogheamn-wg`, `ofogheamn-mesh`
+  and `ofogheamn-blocklist.timer` before deleting their units
+  (dangling wants symlinks), drops the `wg0` interface, removes
+  the ufw openings the installer added, and removes the
+  rendered VPN credential files (`/etc/ipsec.secrets`, and
+  `chap-secrets` only when it carries our rendered header).
+
+### Docs aligned with the code
+- Root README: Prefetch is off by design (the CoD warmer is
+  the prefetch) and ECS is off by default — both bullets said
+  the opposite of the shipped config.
+- Windows/macOS READMEs + macOS banner claimed "DoT on 853";
+  the AdGuard Home editions serve no DoT until a certificate
+  is configured in AGH's Encryption settings. macOS README's
+  uninstall path pointed at a nonexistent `server/` folder.
+- `config/blocklist.conf`'s comment now states the verified
+  `#` semantics; `smartdns.conf`'s comment no longer claims
+  missing certs are auto-generated (they are fatal).
+- MikroTik script creates the container env list before the
+  container that references it.
+
+### platforms/saman-os
+- Audited: it vendors no stack copy — it delegates to the root
+  installer, so it already carries the current stack (VPN
+  included). Nothing to sync.
+
 ## v1.3 — 2026-11-20 (L2TP/IPsec + PPTP VPN servers)
 
 - **L2TP/IPsec server** (strongSwan IKEv1/PSK + xl2tpd + ppp) and

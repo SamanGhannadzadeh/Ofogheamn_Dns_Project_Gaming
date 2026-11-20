@@ -8,6 +8,11 @@ mkdir -p "$ETC/lists" "$ETC/tls" /var/cache/ofogheamn-dns /var/log/ofogheamn-dns
 
 seed() { [ -e "$ETC/$1" ] || cp "$SRC/$1" "$ETC/$1"; }
 seed smartdns.conf; seed hijack.conf; seed blocklist.conf; seed force-dns.conf
+# smartdns.conf includes this file and SmartDNS refuses to start
+# when an included file is missing (proven with the real binary);
+# the bare-metal installer learned this in v1.2.1, the container
+# seed list missed it until v1.4.
+seed mesh-upstream.conf
 seed lists/gaming.domains; seed lists/cod.domains
 HOSTNAME_DNS="${OFOGH_DNS_HOSTNAME:-dns.ofogheamn.ir}"
 sed -i "s/^bind-cert-san .*/bind-cert-san $HOSTNAME_DNS/" "$ETC/smartdns.conf"

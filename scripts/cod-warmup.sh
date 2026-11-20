@@ -15,7 +15,7 @@ GAMING=/etc/ofogheamn-dns/lists/gaming.domains
 {
   grep -vE '^\s*(#|$)' "$COD" 2>/dev/null
   if [ -r "$GAMING" ]; then
-    total=$(grep -cvE '^\s*(#|$)' "$GAMING" 2>/dev/null || echo 0)
+    total=$(grep -cvE '^\s*(#|$)' "$GAMING" 2>/dev/null || true)
     if [ "${total:-0}" -gt 0 ]; then
       quarter=$(( (10#$(date +%M) / 4) % 4 ))
       grep -vE '^\s*(#|$)' "$GAMING" | awk -v q="$quarter" 'NR % 4 == q'

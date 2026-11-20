@@ -13,7 +13,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 ```
 
 - پنل مدیریت DNS: ‏`http://localhost:3000` (اولین ورود: ساخت کاربر مدیر)
-- DNS روی IP همین دستگاه: پورت 53 و DoT روی 853
+- DNS روی IP همین دستگاه: پورت 53 (UDP و TCP). ‏DoT/DoH به‌صورت پیش‌فرض سرو نمی‌شود؛ از پنل AdGuard Home در Settings ← Encryption با یک گواهی می‌توانی روشنش کنی.
 - پروکسی: پورت 2080 با کاربر `ofogh` (رمز در خروجی نصب چاپ می‌شود)
 - حذف: `.\uninstall.ps1`
 

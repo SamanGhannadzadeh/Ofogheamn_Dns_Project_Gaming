@@ -84,10 +84,19 @@ def main():
 
     states = {k: svc_state(v) for k, v in SERVICES.items()}
     # mesh/wg may legitimately be off (opt-in features); only the
-    # core three are health-critical.
-    for core in ("dns", "proxy", "panel"):
-        if states[core] not in ("active",):
-            problems.append(f"{core}-{states[core]}")
+    # core services are health-critical. The core set is adaptive:
+    # a Lite node has no panel (no panel.conf) and a node whose
+    # sing-box download failed has no proxy — both used to report
+    # permanently "unhealthy" for a service that was never meant
+    # to run there (v1.4 fix).
+    core = ["dns"]
+    if os.path.exists("/usr/local/bin/sing-box"):
+        core.append("proxy")
+    if os.path.exists("/etc/ofogheamn-dns/panel.conf"):
+        core.append("panel")
+    for name in core:
+        if states[name] not in ("active",):
+            problems.append(f"{name}-{states[name]}")
 
     days = cert_days()
     if days is not None and days < 14:
