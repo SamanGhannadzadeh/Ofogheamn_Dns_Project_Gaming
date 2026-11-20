@@ -241,7 +241,7 @@ systemctl enable --now ofogheamn-health.timer >/dev/null 2>&1 || true
 [ "$LITE" != "1" ] && systemctl enable --now ofogheamn-panel >/dev/null 2>&1 || true
 [ -x /usr/local/bin/sing-box ] && systemctl enable --now ofogheamn-proxy >/dev/null 2>&1 || true
 [ -f "$ETC/wg0.conf" ] && systemctl enable --now ofogheamn-wg >/dev/null 2>&1 || true
-[ -x /usr/sbin/xl2tpd ] && [ -x /usr/sbin/pptpd ] && systemctl enable --now ofogheamn-vpn >/dev/null 2>&1 || true
+[ -x /usr/sbin/xl2tpd ] && [ -x /usr/sbin/ipsec ] && systemctl enable --now ofogheamn-vpn >/dev/null 2>&1 || true
 if ! systemctl restart ofogheamn-dns; then
   echo "Service failed to start. If systemd-resolved holds port 53, run:"
   echo "  sed -i 's/^#DNSStubListener=.*/DNSStubListener=no/' /etc/systemd/resolved.conf"
