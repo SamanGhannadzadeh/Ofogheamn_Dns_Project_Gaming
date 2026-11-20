@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Runtime state (never commit a node's live state or secrets)
+*.log
+*.state
+state.json
+*-credentials.txt
+console.json
+panel-users.json
+proxy-users.json
+vpn-users.json
+
+# Local backups and scratch
+*.tar.gz
+*.bak
+*~
+.DS_Store
