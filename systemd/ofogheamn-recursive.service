@@ -1,0 +1,13 @@
+[Unit]
+Description=Ofogheamn DNS recursive back-end (Unbound, 127.0.0.1:5335)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/unbound -d -c /etc/ofogheamn-dns/unbound.conf
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

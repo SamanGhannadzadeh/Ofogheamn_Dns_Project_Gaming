@@ -2,7 +2,7 @@
 # Remove Ofogheamn DNS completely (services, files, firewall chain).
 set -e
 [ "$(id -u)" = "0" ] || { echo "run with sudo"; exit 1; }
-systemctl disable --now ofogheamn-dns ofogheamn-panel ofogheamn-proxy cod-warmup.timer ofogheamn-health.timer 2>/dev/null || true
+systemctl disable --now ofogheamn-dns ofogheamn-panel ofogheamn-proxy cod-warmup.timer ofogheamn-health.timer ofogheamn-recursive 2>/dev/null || true
 # Also disable the units install.sh (or the owner, for mesh)
 # enables conditionally — deleting an enabled unit's file without
 # disabling it leaves a dangling wants symlink behind (v1.4 fix).
@@ -15,7 +15,7 @@ rm -f /etc/systemd/system/ofogheamn-dns.service /etc/systemd/system/ofogheamn-pa
       /etc/systemd/system/ofogheamn-health.timer /etc/systemd/system/ofogheamn-wg.service \
       /etc/systemd/system/ofogheamn-vpn.service \
       /etc/systemd/system/ofogheamn-mesh.service /etc/systemd/system/ofogheamn-blocklist.service \
-      /etc/systemd/system/ofogheamn-blocklist.timer
+      /etc/systemd/system/ofogheamn-blocklist.timer /etc/systemd/system/ofogheamn-recursive.service
 rm -f /etc/sysctl.d/99-ofogheamn-dns.conf
 rm -f /usr/local/bin/ofogheamn-dns /usr/local/bin/smartdns /usr/local/bin/sing-box \
       /usr/local/bin/cod-warmup /usr/local/bin/ofogheamn-firewall \

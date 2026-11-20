@@ -106,6 +106,9 @@ cp "$SRC_DIR/config/force-dns.conf" "$ETC/force-dns.conf"
 # smartdns.conf includes this file; a missing conf-file is fatal
 # at startup, so the repo ships a comment-only placeholder.
 cp "$SRC_DIR/config/mesh-upstream.conf" "$ETC/mesh-upstream.conf"
+# smartdns.conf includes this file too; missing = fatal (same rule)
+cp "$SRC_DIR/config/recursive.conf" "$ETC/recursive.conf"
+cp "$SRC_DIR/config/unbound.conf" "$ETC/unbound.conf"
 cp "$SRC_DIR/config/lists/gaming.domains" "$ETC/lists/gaming.domains"
 cp "$SRC_DIR/config/lists/cod.domains" "$ETC/lists/cod.domains"
 sed -i "s/^bind-cert-san .*/bind-cert-san $HOSTNAME_DNS/" "$ETC/smartdns.conf"
@@ -228,6 +231,7 @@ cp "$SRC_DIR/systemd/ofogheamn-vpn.service" /etc/systemd/system/ofogheamn-vpn.se
 cp "$SRC_DIR/systemd/ofogheamn-blocklist.service" /etc/systemd/system/ofogheamn-blocklist.service
 cp "$SRC_DIR/systemd/ofogheamn-blocklist.timer" /etc/systemd/system/ofogheamn-blocklist.timer
 cp "$SRC_DIR/systemd/ofogheamn-proxy.service" /etc/systemd/system/ofogheamn-proxy.service
+cp "$SRC_DIR/systemd/ofogheamn-recursive.service" /etc/systemd/system/ofogheamn-recursive.service
 cp "$SRC_DIR/systemd/ofogheamn-mesh.service" /etc/systemd/system/ofogheamn-mesh.service
 cp "$SRC_DIR/systemd/ofogheamn-health.service" /etc/systemd/system/ofogheamn-health.service
 cp "$SRC_DIR/systemd/ofogheamn-health.timer" /etc/systemd/system/ofogheamn-health.timer

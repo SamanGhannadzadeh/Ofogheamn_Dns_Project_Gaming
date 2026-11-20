@@ -31,6 +31,7 @@ SERVICES = {
     "wg": "ofogheamn-wg",
     "mesh": "ofogheamn-mesh",
     "vpn": "ofogheamn-vpn",
+    "recursive": "ofogheamn-recursive",
 }
 CERT = "/etc/ofogheamn-dns/tls/fullchain.pem"
 
@@ -141,6 +142,14 @@ def main():
     # permanently "unhealthy" for a service that was never meant
     # to run there (v1.4 fix).
     core = ["dns"]
+    # The recursive back-end is core only while toggled on
+    # (its SmartDNS include carries an active server line).
+    try:
+        with open("/etc/ofogheamn-dns/recursive.conf") as fh:
+            if any(line.startswith("server ") for line in fh):
+                core.append("recursive")
+    except OSError:
+        pass
     if os.path.exists("/usr/local/bin/sing-box"):
         core.append("proxy")
     if os.path.exists("/etc/ofogheamn-dns/panel.conf"):

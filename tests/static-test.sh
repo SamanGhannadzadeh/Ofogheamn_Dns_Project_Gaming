@@ -220,7 +220,7 @@ if curl -fsSL --max-time 90 -o "$SD_BIN" \
       -e 's#^bind-tls \[::\]:853#bind-tls 127.0.0.1:15853#' \
       -e 's#^bind-https \[::\]:443#bind-https 127.0.0.1:15443#' \
       config/smartdns.conf > "$T/smartdns.conf"
-  for f in hijack.conf blocklist.conf force-dns.conf mesh-upstream.conf; do
+  for f in hijack.conf blocklist.conf force-dns.conf mesh-upstream.conf recursive.conf; do
     cp "config/$f" "$T/etc/"
   done
   cp config/lists/*.domains "$T/etc/lists/"
@@ -264,6 +264,18 @@ EOF
   [ "$HV" = "::" ]; chk "hijack AAAA answered locally (::) - no upstream leak" $?
   has scripts/ofogheamn-dns 'hijack_set'
   chk "CLI writes hijack rules through the dual-stack helper" $?
+  # Recursive back-end (v1.10): the include must exist in the
+  # shipped config, the installer must ship every piece, and
+  # the CLI must expose the toggle — a missing conf-file is
+  # fatal to SmartDNS, so this chain is load-bearing.
+  has config/smartdns.conf 'conf-file /etc/ofogheamn-dns/recursive.conf'
+  chk "smartdns.conf includes recursive.conf" $?
+  has install.sh 'config/recursive.conf'
+  chk "installer ships recursive.conf" $?
+  has install.sh 'config/unbound.conf'
+  chk "installer ships unbound.conf" $?
+  has scripts/ofogheamn-dns 'recursive)'
+  chk "CLI exposes the recursive command" $?
 else
   echo "SKIP  smartdns binary unavailable (offline?) — config tests skipped"
 fi

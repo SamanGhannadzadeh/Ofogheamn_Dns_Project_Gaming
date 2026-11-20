@@ -1,3 +1,29 @@
+## v1.10 — 2026-11-21 (recursive back-end; survey stage 2)
+
+- **Unbound recursive back-end (opt-in).** 
+  `ofogheamn-dns recursive enable` starts a local Unbound
+  (127.0.0.1:5335, shipped config with serve-expired +
+  prefetch, unit ofogheamn-recursive.service) and writes
+  one line into the new `recursive.conf` include:
+  `server 127.0.0.1:5335 -group recursive`. SmartDNS races
+  it against the public upstreams — cold answers cost a
+  full recursion, warm ones are local, the node keeps
+  resolving when every public upstream is filtered, and no
+  single provider sees the whole query stream. Health
+  treats the unit as core only while toggled on. The
+  include ships inert (a missing conf-file is fatal, so
+  the file always exists), and install/uninstall symmetry
+  covers every new piece.
+- **Split-ECS stays a blueprint, on purpose.** The survey
+  suggested productising it; the repo already carries it
+  as `config/ecs-split.conf.example` with the reasoning
+  (ECS off is the maintainer's core-model decision — the
+  node's location is what upstreams should see) and a
+  measure-first experiment path. The operator checklist
+  now points at it. No blind toggle: the SmartDNS ECS flag
+  differs between releases, exactly what the blueprint
+  warns about.
+
 ## v1.9 — 2026-11-21 (hijack, done properly: dual-stack tight)
 
 The Smart-DNS hijack had a hole you could walk through: 

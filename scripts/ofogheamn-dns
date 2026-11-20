@@ -401,6 +401,24 @@ PY
         echo "AnyTLS disabled" ;;
       *) [ -f /etc/ofogheamn-dns/anytls.json ] && echo "AnyTLS: on" || echo "AnyTLS: off" ;;
     esac ;;
+  recursive)
+    shift
+    case "${1:-status}" in
+      enable)
+        need_root
+        command -v unbound >/dev/null || { echo "the recursive back-end needs the unbound package first:"; echo "  apt-get install -y unbound"; echo "(its config and systemd unit are already installed by this project)"; exit 1; }
+        printf '# managed by: ofogheamn-dns recursive enable\nserver 127.0.0.1:5335 -group recursive\n' > "$ETC/recursive.conf"
+        systemctl enable --now ofogheamn-recursive 2>/dev/null || true
+        reload_dns
+        echo "recursive back-end on: local Unbound (127.0.0.1:5335) now races the public upstreams" ;;
+      disable)
+        need_root
+        printf '# recursive back-end off (ships inert — see config/recursive.conf in the repo)\n' > "$ETC/recursive.conf"
+        systemctl disable --now ofogheamn-recursive 2>/dev/null || true
+        reload_dns
+        echo "recursive back-end off" ;;
+      *) grep -q '^server ' "$ETC/recursive.conf" 2>/dev/null && echo "Recursive: on" || echo "Recursive: off" ;;
+    esac ;;
   wg)
     shift
     case "${1:-status}" in
