@@ -39,6 +39,16 @@ A="$(grep -n '^PUBIP=' install.sh | head -1 | cut -d: -f1)"
 U="$(grep -n 'OFOGH_WG_ENDPOINT' install.sh | grep -v '^[0-9]*:[[:space:]]*#' | head -1 | cut -d: -f1)"
 [ -n "$A" ] && [ -n "$U" ] && [ "$A" -lt "$U" ]
 chk "install.sh assigns PUBIP before the wg block uses it" $?
+# verify_digest: under set -e + pipefail, a failed digest lookup
+# (GitHub API rate-limit 403 is routine) made the want= pipeline
+# kill the installer silently instead of reaching the documented
+# "warn and continue" path (v1.5 fix; proven by isolation test).
+has install.sh 'print("")'"'"' "\$3" 2>/dev/null || true'
+chk "linux verify_digest tolerates API failure" $?
+has platforms/macos/install.sh 'print("")'"'"' "\$3" 2>/dev/null || true'
+chk "macos verify_digest tolerates API failure" $?
+has scripts/ofogheamn-dns 'print("")'"'"' "\$3" 2>/dev/null || true'
+chk "CLI verify_digest tolerates API failure" $?
 # The public-mode hashlimit rule was inverted (dropped the
 # well-behaved, passed the floods): hashlimit lines must RETURN,
 # never DROP.
@@ -103,6 +113,15 @@ has "$W" 'PSScriptRoot\\.\.\\\.\.'
 chk "windows install RepoRoot goes up two levels" $?
 hasnot "$W" 'PSScriptRoot\\.\.\\\.\.\\\.\.'
 chk "windows install RepoRoot does not go up three levels" $?
+
+echo "== macos installer (structural) =="
+# The macOS installer downloaded both binaries with no digest
+# check until v1.5; the project policy (Linux/Windows/Docker)
+# is that every fetched binary is verified.
+has platforms/macos/install.sh 'verify_digest "AdguardTeam/AdGuardHome"'
+chk "macos install verifies the AdGuard Home digest" $?
+has platforms/macos/install.sh 'verify_digest "SagerNet/sing-box"'
+chk "macos install verifies the sing-box digest" $?
 
 echo "== smartdns: real binary vs shipped config =="
 SD_DIR="$(mktemp -d)"

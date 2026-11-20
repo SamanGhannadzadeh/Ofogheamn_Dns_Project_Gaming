@@ -1,3 +1,40 @@
+## v1.5 — 2026-11-20 (verification hardening)
+
+A fresh audit of every installer and entry point, hunting the
+same bug classes the v1.4 round fixed. Two real findings, both
+in download-digest verification; everything else re-checked
+clean (install/uninstall file symmetry is exact, VPN defaults
+printed by the installer match `config/vpn.conf`, the OpenWrt /
+Docker / Windows installers hold all their v1.4 fixes).
+
+### Fixes
+- **A failed digest lookup could kill the installer.**
+  `verify_digest` fetches the official SHA-256 from the GitHub
+  API; when the API is unreachable or rate-limited (HTTP 403 is
+  routine for unauthenticated calls), `curl -f` fails — and
+  under `set -e` + `pipefail` that failure propagated out of
+  the `want=$(...)` assignment and terminated the install
+  silently, instead of reaching the documented "warn loudly
+  and continue" path. Proven by isolation test (exit 22, no
+  output). The lookup is now failure-tolerant (`|| true`) in
+  all three bash copies — `install.sh`, the macOS installer
+  and the `ofogheamn-dns` CLI updater — and all three outcomes
+  are test-proven: API failure → warning + install continues;
+  digest match → verified; digest mismatch → SECURITY ABORT.
+  (The Windows `Test-Digest` and Docker `verify-download.py`
+  already handled this correctly in their own idioms.)
+- **macOS installer verified nothing.** It downloaded
+  AdGuard Home and sing-box with no digest check at all —
+  the last installer still outside the project policy that
+  every fetched binary is verified (Linux/Windows/Docker
+  since v1.4). It now runs the same `verify_digest` as the
+  Linux installer (via the macOS-native `shasum -a 256`).
+
+### Tests
+- `tests/static-test.sh`: 52 → **57 checks**, all passing.
+  New: macOS verifies both downloads; all three bash
+  `verify_digest` copies tolerate API failure.
+
 ## v1.4 — 2026-11-20 (debug + polish round)
 
 Every installer and entry point audited as a first-time user

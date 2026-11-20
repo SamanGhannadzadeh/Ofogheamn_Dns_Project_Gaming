@@ -63,7 +63,7 @@ try:
     a = [x for x in d.get("assets", []) if x["name"] == sys.argv[1]]
     print((a[0].get("digest") or "").replace("sha256:", "") if a else "")
 except Exception:
-    print("")' "$3" 2>/dev/null)"
+    print("")' "$3" 2>/dev/null || true)"
   if [ -z "$want" ]; then
     echo "WARNING: could not fetch the official digest for $3; installing unverified"
     return 0

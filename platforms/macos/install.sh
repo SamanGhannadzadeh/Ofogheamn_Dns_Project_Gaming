@@ -16,10 +16,39 @@ ARCH="$(uname -m)"
 echo "== Ofogheamn DNS node for macOS ($ARCH) =="
 sudo mkdir -p "$ROOT" "$DATA"
 
+# ---------- download integrity ----------
+# Same policy as the Linux and Windows installers: every binary
+# is checked against the SHA-256 digest GitHub records for the
+# release asset. API unreachable -> warn and continue; a KNOWN
+# mismatch -> abort. This installer skipped verification until
+# v1.5 — Linux, Windows and Docker already verified (v1.4).
+verify_digest() { # repo tag asset file
+  local want got
+  want="$(curl -fsSL --max-time 30 "https://api.github.com/repos/$1/releases/tags/$2" 2>/dev/null \
+    | python3 -c 'import json,sys
+try:
+    d = json.load(sys.stdin)
+    a = [x for x in d.get("assets", []) if x["name"] == sys.argv[1]]
+    print((a[0].get("digest") or "").replace("sha256:", "") if a else "")
+except Exception:
+    print("")' "$3" 2>/dev/null || true)"
+  if [ -z "$want" ]; then
+    echo "WARNING: could not fetch the official digest for $3; installing unverified"
+    return 0
+  fi
+  got="$(shasum -a 256 "$4" | awk '{print $1}')"
+  if [ "$got" != "$want" ]; then
+    echo "SECURITY ABORT: sha256 mismatch for $3 (got $got, want $want)" >&2
+    exit 1
+  fi
+  echo "digest verified: $3"
+}
+
 # ---------- AdGuard Home ----------
 if [ ! -x "$ROOT/AdGuardHome" ]; then
   echo "Downloading AdGuard Home $AGH_VER ..."
   curl -fsSL -o /tmp/agh.zip "https://github.com/AdguardTeam/AdGuardHome/releases/download/$AGH_VER/AdGuardHome_darwin_${AGH_ARCH}.zip"
+  verify_digest "AdguardTeam/AdGuardHome" "$AGH_VER" "AdGuardHome_darwin_${AGH_ARCH}.zip" /tmp/agh.zip
   unzip -o -q /tmp/agh.zip -d /tmp/agh
   sudo install -m 755 /tmp/agh/AdGuardHome/AdGuardHome "$ROOT/"
 fi
@@ -56,6 +85,7 @@ fi
 if [ ! -x "$ROOT/sing-box" ]; then
   echo "Downloading sing-box $SINGBOX_VER ..."
   curl -fsSL -o /tmp/sb.tar.gz "https://github.com/SagerNet/sing-box/releases/download/v$SINGBOX_VER/sing-box-$SINGBOX_VER-darwin-${SB_ARCH}.tar.gz"
+  verify_digest "SagerNet/sing-box" "v$SINGBOX_VER" "sing-box-$SINGBOX_VER-darwin-${SB_ARCH}.tar.gz" /tmp/sb.tar.gz
   tar -xzf /tmp/sb.tar.gz -C /tmp
   sudo install -m 755 "/tmp/sing-box-$SINGBOX_VER-darwin-${SB_ARCH}/sing-box" "$ROOT/"
 fi
