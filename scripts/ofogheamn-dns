@@ -7,6 +7,7 @@
 #    game  list|add <domain>|remove <domain>      (gaming list)
 #    cod   list|add <domain>|remove <domain>      (CoD list)
 #    proxy status|users|add-user <u> <p>|del-user <u>|restart
+#    vpn   status|restart|set-user <u> <p>|set-pass <p>|set-psk <psk>
 #    panel | panel-password <new> | cod-test | warmup
 #    restart | logs [dns|proxy] [n] | test | update | firewall
 # ============================================================
@@ -25,6 +26,7 @@ cmd_status() {
   echo " DNS service : $(state ofogheamn-dns)   (UDP/TCP 53, DoT 853, DoH 443)"
   echo " Proxy       : $(state ofogheamn-proxy)   (mixed HTTP/SOCKS5 :2080, UDP on)"
   echo " Tunnel (WG) : $(state ofogheamn-wg)   (wg0 :51820/udp, peers: $(ofogheamn-wg-peer list 2>/dev/null | wc -l))"
+  echo " VPN         : $(state ofogheamn-vpn)   (L2TP/IPsec + PPTP, user: $(vpn_conf_get user))"
   echo " Panel       : $(state ofogheamn-panel)   (http://<server>:8080)"
   echo " Cache warmer: $(state cod-warmup.timer)   (CoD/gaming lists, every 4 min)"
   echo " Mode        : ${B}$(get_mode)${N}"
@@ -91,6 +93,45 @@ PY
   esac
 }
 
+vpn_conf_get() { grep -E "^$1=" "$ETC/vpn.conf" 2>/dev/null | cut -d= -f2; }
+vpn_conf_set() { # key value — credentials live in vpn.conf only;
+  # ofogheamn-vpn-setup renders them into chap-secrets/ipsec.secrets.
+  # Rewrite-by-filter (not sed) so passwords with any characters work.
+  local kept
+  kept="$(grep -vE "^$1=" "$ETC/vpn.conf" 2>/dev/null || true)"
+  if [ -n "$kept" ]; then printf '%s\n' "$kept" > "$ETC/vpn.conf"; else : > "$ETC/vpn.conf"; fi
+  echo "$1=$2" >> "$ETC/vpn.conf"
+  chmod 600 "$ETC/vpn.conf"
+}
+
+cmd_vpn() {
+  case "${1:-status}" in
+    status)
+      echo "VPN servers : $(state ofogheamn-vpn)"
+      echo " L2TP/IPsec : UDP 500/4500/1701 + ESP — pool $(vpn_conf_get l2tp_pool) — PSK: $(vpn_conf_get psk)"
+      echo " PPTP       : TCP 1723 + GRE (MPPE-128 required) — pool $(vpn_conf_get pptp_pool)"
+      echo " user       : $(vpn_conf_get user)   (password in $ETC/vpn.conf)"
+      echo " ${R}defaults are public — change them: vpn set-user / set-pass / set-psk${N}" ;;
+    restart) need_root; systemctl restart ofogheamn-vpn && echo ok ;;
+    set-user)
+      need_root
+      [ -n "${2:-}" ] && [ -n "${3:-}" ] || { echo "usage: ofogheamn-dns vpn set-user <user> <pass>"; return 64; }
+      vpn_conf_set user "$2"; vpn_conf_set pass "$3"
+      systemctl restart ofogheamn-vpn && echo "VPN user updated" ;;
+    set-pass)
+      need_root
+      [ -n "${2:-}" ] || { echo "usage: ofogheamn-dns vpn set-pass <new>"; return 64; }
+      vpn_conf_set pass "$2"
+      systemctl restart ofogheamn-vpn && echo "VPN password updated" ;;
+    set-psk)
+      need_root
+      [ -n "${2:-}" ] || { echo "usage: ofogheamn-dns vpn set-psk <new>"; return 64; }
+      vpn_conf_set psk "$2"
+      systemctl restart ofogheamn-vpn && echo "IPsec PSK updated" ;;
+    *) echo "usage: ofogheamn-dns vpn status|restart|set-user <u> <p>|set-pass <p>|set-psk <psk>"; return 64 ;;
+  esac
+}
+
 menu() {
   while true; do
     echo; echo "${B}${C}🌐 Ofogheamn DNS — منوی مدیریت${N}"
@@ -138,6 +179,7 @@ print("panel password updated")
 PY
     systemctl restart ofogheamn-panel 2>/dev/null || true ;;
   proxy) shift; cmd_proxy "$@" ;;
+  vpn) shift; cmd_vpn "$@" ;;
   region) python3 /usr/local/bin/ofogheamn-region.py "${2:-}" ;;
   bench) python3 /usr/local/bin/ofogheamn-bench.py "${2:-}" ;;
   health) python3 /usr/local/bin/ofogheamn-health.py "${2:-}" ;;

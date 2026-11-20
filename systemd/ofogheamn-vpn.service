@@ -1,0 +1,13 @@
+[Unit]
+Description=Ofogheamn VPN — L2TP/IPsec + PPTP servers
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+ExecStart=/usr/local/bin/ofogheamn-vpn-setup
+ExecStop=/bin/sh -c 'systemctl stop strongswan-starter strongswan ipsec xl2tpd pptpd 2>/dev/null || true'
+
+[Install]
+WantedBy=multi-user.target

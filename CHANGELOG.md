@@ -1,3 +1,24 @@
+## v1.3 — 2026-11-20 (L2TP/IPsec + PPTP VPN servers)
+
+- **L2TP/IPsec server** (strongSwan IKEv1/PSK + xl2tpd + ppp) and
+  **PPTP server** (pptpd, MPPE-128 required) on every node — for
+  devices with no WireGuard app: native clients on Windows,
+  Android, iOS/macOS (L2TP) and routers. Same exit model as the
+  WireGuard tunnel: clients are NATed out of the node and get the
+  node's own SmartDNS pushed over PPP (pools 10.67.0.0/24 and
+  10.68.0.0/24).
+- Credentials live in ONE place, `/etc/ofogheamn-dns/vpn.conf`;
+  `ofogheamn-vpn-setup` renders chap-secrets + ipsec.secrets from
+  it on every start. Shipped defaults (ofogh / ofogh1234 /
+  PSK ofogheamn) are public — the installer banner, the panel VPN
+  tab and docs/VPN.fa.md all warn loudly to change them
+  (`ofogheamn-dns vpn set-user / set-pass / set-psk`).
+- Firewall: UDP 500/4500/1701 + ESP for IPsec, TCP 1723 + GRE for
+  PPTP in `ofogheamn-firewall` (+ ufw when active); MSS clamping
+  extended from wg0 to ppp+ interfaces.
+- Panel: new VPN tab (service state, PSK/user/ports, restart) and a
+  dashboard card; health report now includes the VPN service.
+
 ## v1.2.1 — 2026-11-20 (startup robustness)
 
 - Ship `config/mesh-upstream.conf` (comment-only placeholder) and

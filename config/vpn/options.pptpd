@@ -1,0 +1,22 @@
+# PPP options for PPTP sessions (pptpd option file).
+# Managed by the project: install.sh copies this to
+# /etc/ppp/options.pptpd. Users come from /etc/ppp/chap-secrets,
+# rendered from /etc/ofogheamn-dns/vpn.conf.
+name pptpd
+refuse-pap
+refuse-chap
+refuse-mschap
+require-mschap-v2
+# Encryption is mandatory: a PPTP session that cannot do MPPE-128
+# is refused, never downgraded to plaintext.
+require-mppe-128
+# DNS = this node (SmartDNS).
+ms-dns 10.68.0.1
+proxyarp
+lock
+nobsdcomp
+novj
+novjccomp
+nologfd
+mtu 1400
+mru 1400

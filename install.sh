@@ -121,6 +121,7 @@ fi
 
 # ---------- gaming tunnel (WireGuard) ----------
 install -m 755 "$SRC_DIR/scripts/ofogheamn-wg-setup.sh" /usr/local/bin/ofogheamn-wg-setup
+install -m 755 "$SRC_DIR/scripts/ofogheamn-vpn-setup.sh" /usr/local/bin/ofogheamn-vpn-setup
 install -m 755 "$SRC_DIR/scripts/ofogheamn-wg-peer.py" /usr/local/bin/ofogheamn-wg-peer
 install -m 755 "$SRC_DIR/scripts/ofogheamn-mesh.py" /usr/local/bin/ofogheamn-mesh.py
 install -m 755 "$SRC_DIR/scripts/ofogheamn-region.py" /usr/local/bin/ofogheamn-region.py
@@ -131,6 +132,22 @@ if ! command -v wg >/dev/null 2>&1; then
   apt-get update -qq >/dev/null 2>&1 || true
   apt-get install -y -qq wireguard-tools >/dev/null 2>&1 || echo "WARNING: wireguard-tools install failed; tunnel unavailable until 'apt install wireguard-tools'"
 fi
+# ---------- VPN servers (L2TP/IPsec + PPTP) ----------
+# For devices with no WireGuard app: Windows, Android and routers
+# all speak L2TP/IPsec natively; PPTP covers the legacy leftovers.
+if ! command -v xl2tpd >/dev/null 2>&1 || ! command -v pptpd >/dev/null 2>&1 || ! command -v ipsec >/dev/null 2>&1; then
+  say "installing VPN servers (strongSwan + xl2tpd + pptpd)"
+  apt-get update -qq >/dev/null 2>&1 || true
+  apt-get install -y -qq strongswan xl2tpd pptpd >/dev/null 2>&1 || echo "WARNING: VPN package install failed; L2TP/PPTP unavailable until 'apt install strongswan xl2tpd pptpd'"
+fi
+# Daemon configs are project-managed (sources in config/vpn/).
+mkdir -p /etc/xl2tpd /etc/ppp
+cp "$SRC_DIR/config/vpn/ipsec.conf" /etc/ipsec.conf
+cp "$SRC_DIR/config/vpn/xl2tpd.conf" /etc/xl2tpd/xl2tpd.conf
+cp "$SRC_DIR/config/vpn/options.xl2tpd" /etc/ppp/options.xl2tpd
+cp "$SRC_DIR/config/vpn/pptpd.conf" /etc/pptpd.conf
+cp "$SRC_DIR/config/vpn/options.pptpd" /etc/ppp/options.pptpd
+
 if command -v wg >/dev/null 2>&1 && [ ! -f "$ETC/wg-server.key" ]; then
   wg genkey > "$ETC/wg-server.key"; chmod 600 "$ETC/wg-server.key"
   printf 'port=51820\nendpoint=%s\n' "${OFOGH_WG_ENDPOINT:-$PUBIP}" > "$ETC/wg-server.conf"
@@ -152,6 +169,12 @@ elif [ ! -f "$ETC/panel.conf" ]; then
   HASH="$(printf %s "$PANEL_PASS" | sha256sum | cut -d' ' -f1)"
   printf 'port=8080\nbind=0.0.0.0\npassword_hash=%s\n' "$HASH" > "$ETC/panel.conf"
   chmod 600 "$ETC/panel.conf"
+fi
+VPN_NEW=""
+if [ ! -f "$ETC/vpn.conf" ]; then
+  cp "$SRC_DIR/config/vpn.conf" "$ETC/vpn.conf"
+  chmod 600 "$ETC/vpn.conf"
+  VPN_NEW=1
 fi
 [ -f "$ETC/mode.conf" ] || echo "mode=public" > "$ETC/mode.conf"
 [ -f "$ETC/allowlist.txt" ] || printf '# one IP or CIDR per line (private mode)\n' > "$ETC/allowlist.txt"
@@ -185,6 +208,7 @@ cp "$SRC_DIR/systemd/cod-warmup.service" /etc/systemd/system/cod-warmup.service
 cp "$SRC_DIR/systemd/cod-warmup.timer" /etc/systemd/system/cod-warmup.timer
 cp "$SRC_DIR/systemd/ofogheamn-panel.service" /etc/systemd/system/ofogheamn-panel.service
 cp "$SRC_DIR/systemd/ofogheamn-wg.service" /etc/systemd/system/ofogheamn-wg.service
+cp "$SRC_DIR/systemd/ofogheamn-vpn.service" /etc/systemd/system/ofogheamn-vpn.service
 cp "$SRC_DIR/systemd/ofogheamn-blocklist.service" /etc/systemd/system/ofogheamn-blocklist.service
 cp "$SRC_DIR/systemd/ofogheamn-blocklist.timer" /etc/systemd/system/ofogheamn-blocklist.timer
 cp "$SRC_DIR/systemd/ofogheamn-proxy.service" /etc/systemd/system/ofogheamn-proxy.service
@@ -201,6 +225,7 @@ systemctl enable --now ofogheamn-health.timer >/dev/null 2>&1 || true
 [ "$LITE" != "1" ] && systemctl enable --now ofogheamn-panel >/dev/null 2>&1 || true
 [ -x /usr/local/bin/sing-box ] && systemctl enable --now ofogheamn-proxy >/dev/null 2>&1 || true
 [ -f "$ETC/wg0.conf" ] && systemctl enable --now ofogheamn-wg >/dev/null 2>&1 || true
+[ -x /usr/sbin/xl2tpd ] && [ -x /usr/sbin/pptpd ] && systemctl enable --now ofogheamn-vpn >/dev/null 2>&1 || true
 if ! systemctl restart ofogheamn-dns; then
   echo "Service failed to start. If systemd-resolved holds port 53, run:"
   echo "  sed -i 's/^#DNSStubListener=.*/DNSStubListener=no/' /etc/systemd/resolved.conf"
@@ -213,6 +238,8 @@ if command -v ufw >/dev/null && ufw status | grep -q "Status: active"; then
   say "opening firewall ports in ufw"
   ufw allow 53 >/dev/null; ufw allow 853 >/dev/null; ufw allow 443/udp >/dev/null; ufw allow 443/tcp >/dev/null
   ufw allow 2080 >/dev/null; ufw allow 8080 >/dev/null; ufw allow 51820/udp >/dev/null
+  ufw allow 500/udp >/dev/null; ufw allow 4500/udp >/dev/null; ufw allow 1701/udp >/dev/null; ufw allow 1723/tcp >/dev/null
+  ufw allow proto esp >/dev/null 2>&1 || true; ufw allow proto gre >/dev/null 2>&1 || true
 fi
 
 sleep 2
@@ -231,6 +258,8 @@ cat <<EOF
    DoH       : https://$HOSTNAME_DNS/dns-query
    DoQ       : $HOSTNAME_DNS : 853 (UDP)
  Proxy    : $PUBIP : 2080 (mixed HTTP/SOCKS5 + UDP, auth required)
+ VPN L2TP : $PUBIP  (L2TP/IPsec, native on Windows/Android/routers)
+ VPN PPTP : $PUBIP : 1723  (legacy devices, MPPE-128 required)
  Panel    : $PANEL_LINE
  Manage:  ofogheamn-dns            (interactive menu)
           ofogheamn-dns status|mode|proxy|cod-test|...
@@ -243,3 +272,5 @@ EOF
 [ -n "$PANEL_PASS" ] && echo " *** PANEL PASSWORD (shown once): $PANEL_PASS"
 [ -n "$PROXY_PASS" ] && echo " *** PROXY USER: ofogh  PASSWORD (shown once): $PROXY_PASS"
 echo " Change them later:  ofogheamn-dns panel-password <new>  /  panel -> Proxy tab"
+[ -n "$VPN_NEW" ] && echo " *** VPN DEFAULTS — CHANGE THEM!  user: ofogh  password: ofogh1234  IPsec PSK: ofogheamn"
+[ -n "$VPN_NEW" ] && echo "     Change:  ofogheamn-dns vpn set-user <user> <pass>  /  ofogheamn-dns vpn set-psk <new>   (file: $ETC/vpn.conf)"

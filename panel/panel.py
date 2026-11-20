@@ -2,7 +2,7 @@
 """Ofogheamn DNS — web management panel (Python stdlib only).
 
 Serves a Persian RTL admin UI + a small JSON API for:
-  * service status (DNS / proxy / panel), restart actions
+  * service status (DNS / proxy / panel / VPN), restart actions
   * public/private mode switch + source allowlist (iptables)
   * Smart-DNS hijack rules (hijack.conf)
   * gaming / CoD domain lists
@@ -127,6 +127,28 @@ def mode_set(mode, allow):
         out = subprocess.run(["bash", script], capture_output=True, text=True, timeout=30)
         return out.returncode == 0, (out.stdout + out.stderr).strip()[-300:]
     return True, "mode saved (firewall script not installed; applied at install)"
+
+
+# ---------------- VPN (L2TP/IPsec + PPTP) ----------------
+def vpn_get():
+    cfg = {}
+    try:
+        with open(os.path.join(ETC, "vpn.conf"), encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if "=" in line and not line.startswith("#"):
+                    k, v = line.split("=", 1)
+                    cfg[k] = v
+    except OSError:
+        pass
+    return {
+        "service": svc_state("ofogheamn-vpn"),
+        "user": cfg.get("user", ""),
+        "pass": cfg.get("pass", ""),
+        "psk": cfg.get("psk", ""),
+        "l2tp_pool": cfg.get("l2tp_pool", "10.67.0.0/24"),
+        "pptp_pool": cfg.get("pptp_pool", "10.68.0.0/24"),
+    }
 
 
 # ---------------- proxy users ----------------
@@ -260,6 +282,7 @@ def status():
         "dns": svc_state("ofogheamn-dns"),
         "proxy": svc_state("ofogheamn-proxy"),
         "wg": svc_state("ofogheamn-wg"),
+        "vpn": vpn_get(),
         "wg_peers": [p.get("name") for p in _wg_peers()],
         "warmup_timer": svc_state("cod-warmup.timer"),
         "mode": mode, "allowlist": allow,
@@ -386,6 +409,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(200, {"ok": ok, "out": out})
             if act == "restart-proxy":
                 ok, out = svc_do("restart", "ofogheamn-proxy")
+                return self._json(200, {"ok": ok, "out": out})
+            if act == "restart-vpn":
+                ok, out = svc_do("restart", "ofogheamn-vpn")
                 return self._json(200, {"ok": ok, "out": out})
             if act == "cod-test":
                 try:
@@ -630,6 +656,7 @@ pre{background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:10
     <button data-t="mode">حالت عمومی / خصوصی</button>
     <button data-t="proxy">پروکسی</button>
     <button data-t="wg">تونل گیمینگ (WireGuard)</button>
+    <button data-t="vpn">VPN ‏(L2TP/PPTP)</button>
     <button data-t="mesh">مش (اتصال نودها)</button>
     <button data-t="logs">لاگ‌ها</button>
   </nav>
@@ -686,6 +713,14 @@ pre{background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:10
     <pre id="w-conf"></pre>
   </section>
 
+  <section id="s-vpn">
+    <p class="sub">برای دستگاه‌هایی که اپ WireGuard ندارند: ویندوز، اندروید، آیفون (فقط L2TP) و روترها L2TP/IPsec را بومی دارند و PPTP برای دستگاه‌های قدیمی است. مسیر مثل تونل WireGuard است: کلاینت ← این نود (DNS + NAT) ← اینترنت/بازی. راهنمای وصل‌شدن قدم‌به‌قدم: docs/VPN.fa.md در مخزن پروژه.</p>
+    <p id="vpn-info"></p>
+    <table id="vpn-table"></table>
+    <div style="margin-top:10px"><button class="act" onclick="act('restart-vpn')">ری‌استارت VPN</button></div>
+    <p class="sub">⚠️ <b>هشدار:</b> نام کاربری، رمز و PSK پیش‌فرض عمومی‌اند و هر کسی می‌داند؛ قبل از استفادهٔ واقعی حتماً عوضشان کن: <span dir="ltr">ofogheamn-dns vpn set-user &lt;user&gt; &lt;pass&gt;</span> و <span dir="ltr">ofogheamn-dns vpn set-psk &lt;new&gt;</span> — فایل مرجع: <span dir="ltr">/etc/ofogheamn-dns/vpn.conf</span>. PPTP ذاتاً ضعیف است؛ هر جا L2TP/IPsec می‌شود، همان را استفاده کن.</p>
+  </section>
+
   <section id="s-mesh">
     <p class="sub">مش یعنی اتصال نودها به هم: هر نود پینگ خودش تا سرورهای بازی و تا همتاهایش را اندازه می‌گیرد؛ اگر جمعِ «من ← همتا» + «همتا ← بازی» از مسیر مستقیم کمتر بود، خروجی از همان همتا می‌رود. فقط به نودی وصل می‌شود که او هم مش را روشن کرده باشد.</p>
     <p id="mesh-info"></p>
@@ -726,6 +761,7 @@ async function refresh(){try{const s=await api('/api/status');
  $('cards').innerHTML=
   '<div class="card">سرویس DNS<b>'+dot(s.dns)+'</b></div>'+
   '<div class="card">پروکسی (پورت '+s.proxy_port+')<b>'+dot(s.proxy)+'</b></div>'+
+  '<div class="card">VPN ‏(L2TP/PPTP)<b>'+dot((s.vpn||{}).service||'unknown')+'</b></div>'+
   '<div class="card">حالت<b>'+(s.mode==='public'?'عمومی':'خصوصی')+'</b></div>'+
   '<div class="card">قوانین هایجک<b>'+s.hijack_count+'</b></div>'+
   '<div class="card">دامنهٔ کالاف<b>'+s.cod_count+'</b></div>'+
@@ -743,6 +779,12 @@ async function refresh(){try{const s=await api('/api/status');
  $('p-info').textContent='کاربران فعلی: '+(s.proxy_users||[]).join('، ');
  $('p-table').innerHTML=(s.proxy_users||[]).map(u=>'<tr><td>'+u+'</td><td><button class="ghost" onclick="proxyDel(\''+u+'\')">حذف</button></td></tr>').join('');
  $('w-table').innerHTML=(s.wg_peers||[]).map(u=>'<tr><td>'+u+'</td><td><button class="ghost" onclick="wgDel(\''+u+'\')">حذف</button></td></tr>').join('');
+ const v=s.vpn||{};
+ $('vpn-info').textContent='وضعیت سرویس: '+(v.service||'—')+' — آدرس سرور برای کلاینت‌ها: آی‌پی عمومی همین نود';
+ $('vpn-table').innerHTML=
+  '<tr><td>L2TP/IPsec</td><td dir="ltr">UDP 500, 4500, 1701 + ESP</td><td>PSK: <span dir="ltr">'+(v.psk||'—')+'</span></td><td dir="ltr">'+(v.l2tp_pool||'')+'</td></tr>'+
+  '<tr><td>PPTP</td><td dir="ltr">TCP 1723 + GRE (47)</td><td>MPPE-128 اجباری</td><td dir="ltr">'+(v.pptp_pool||'')+'</td></tr>'+
+  '<tr><td>نام کاربری</td><td dir="ltr">'+(v.user||'—')+'</td><td>رمز: <span dir="ltr">'+(v.pass||'—')+'</span></td><td>DNS کلاینت: خود نود</td></tr>';
  loadHijack();loadDomains();loadMesh();
 }catch(e){}}
 async function loadMesh(){try{const m=await api('/api/mesh');

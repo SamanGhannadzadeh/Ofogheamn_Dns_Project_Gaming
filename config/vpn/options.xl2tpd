@@ -1,0 +1,17 @@
+# PPP options for L2TP sessions (xl2tpd pppoptfile).
+# Managed by the project: install.sh copies this to
+# /etc/ppp/options.xl2tpd. Users come from /etc/ppp/chap-secrets,
+# rendered from /etc/ofogheamn-dns/vpn.conf.
+ipcp-accept-local
+ipcp-accept-remote
+# DNS = this node (SmartDNS), so VPN clients resolve through the
+# same fastest-IP engine as everyone else.
+ms-dns 10.67.0.1
+noccp
+auth
+hide-password
+mtu 1410
+mru 1410
+nodefaultroute
+proxyarp
+connect-delay 5000

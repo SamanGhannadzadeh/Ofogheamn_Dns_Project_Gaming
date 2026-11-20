@@ -25,6 +25,7 @@ SERVICES = {
     "panel": "ofogheamn-panel",
     "wg": "ofogheamn-wg",
     "mesh": "ofogheamn-mesh",
+    "vpn": "ofogheamn-vpn",
 }
 CERT = "/etc/ofogheamn-dns/tls/fullchain.pem"
 

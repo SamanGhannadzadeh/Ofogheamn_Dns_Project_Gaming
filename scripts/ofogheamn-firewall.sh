@@ -48,13 +48,30 @@ else
   echo "mode=public applied (open resolver)"
 fi
 
+# VPN servers (L2TP/IPsec + PPTP): accept the tunnel ports on INPUT.
+# Idempotent. UDP 1701 is only ever useful inside IPsec (the PSK
+# gate is strongSwan on 500/4500), but xl2tpd binds it plainly, so
+# it is accepted like the rest; ESP has no port (IP protocol 50),
+# GRE (protocol 47) carries the PPTP payload after TCP 1723 setup.
+for spec in "udp 500" "udp 4500" "udp 1701" "tcp 1723"; do
+  set -- $spec
+  iptables -C INPUT -p "$1" --dport "$2" -j ACCEPT 2>/dev/null \
+    || iptables -I INPUT 1 -p "$1" --dport "$2" -j ACCEPT
+done
+for proto in esp gre; do
+  iptables -C INPUT -p "$proto" -j ACCEPT 2>/dev/null \
+    || iptables -I INPUT 1 -p "$proto" -j ACCEPT
+done
+
 # MSS clamping for tunnel traffic (research 2026-11-19): peers behind
 # PPPoE/mobile paths announce MSS values the tunnel cannot carry;
-# clamping TCP MSS to the path MTU on wg0 forwarding stops silent
+# clamping TCP MSS to the path MTU on forwarding stops silent
 # fragmentation stalls. Idempotent; UDP (game traffic) is untouched.
-for dir in -i -o; do
-  iptables -t mangle -C FORWARD $dir wg0 -p tcp --tcp-flags SYN,RST SYN \
-    -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null \
-    || iptables -t mangle -A FORWARD $dir wg0 -p tcp --tcp-flags SYN,RST SYN \
-         -j TCPMSS --clamp-mss-to-pmtu
+for iface in wg0 ppp+; do
+  for dir in -i -o; do
+    iptables -t mangle -C FORWARD $dir "$iface" -p tcp --tcp-flags SYN,RST SYN \
+      -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null \
+      || iptables -t mangle -A FORWARD $dir "$iface" -p tcp --tcp-flags SYN,RST SYN \
+           -j TCPMSS --clamp-mss-to-pmtu
+  done
 done
