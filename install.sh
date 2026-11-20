@@ -145,7 +145,9 @@ fi
 if ! command -v xl2tpd >/dev/null 2>&1 || ! command -v pptpd >/dev/null 2>&1 || ! command -v ipsec >/dev/null 2>&1; then
   say "installing VPN servers (strongSwan + xl2tpd + pptpd)"
   apt-get update -qq >/dev/null 2>&1 || true
-  apt-get install -y -qq strongswan xl2tpd pptpd >/dev/null 2>&1 || echo "WARNING: VPN package install failed; L2TP/PPTP unavailable until 'apt install strongswan xl2tpd pptpd'"
+  for pkg in strongswan xl2tpd pptpd; do
+    apt-get install -y -qq "$pkg" >/dev/null 2>&1 || echo "WARNING: $pkg install failed (not in this distro's archive?); its VPN protocol stays off"
+  done
 fi
 # Daemon configs are project-managed (sources in config/vpn/).
 mkdir -p /etc/xl2tpd /etc/ppp
@@ -161,9 +163,10 @@ if command -v wg >/dev/null 2>&1 && [ ! -f "$ETC/wg-server.key" ]; then
   echo "[]" > "$ETC/wg-peers.json"
   OFOGH_ETC="$ETC" python3 -c "
 import sys; sys.path.insert(0, '/usr/local/bin')
-import importlib.util
-spec = importlib.util.spec_from_file_location('peer', '/usr/local/bin/ofogheamn-wg-peer')
-m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+import importlib.util, importlib.machinery
+loader = importlib.machinery.SourceFileLoader('peer', '/usr/local/bin/ofogheamn-wg-peer')
+spec = importlib.util.spec_from_loader('peer', loader)
+m = importlib.util.module_from_spec(spec); loader.exec_module(m)
 m.write_conf([])"
 fi
 
