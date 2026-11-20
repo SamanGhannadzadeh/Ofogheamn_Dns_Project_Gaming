@@ -1,3 +1,24 @@
+## v1.9 — 2026-11-21 (hijack, done properly: dual-stack tight)
+
+The Smart-DNS hijack had a hole you could walk through: 
+`add-hijack` wrote only an A record, so AAAA queries for a
+hijacked name still resolved upstream and every dual-stack
+client bypassed the rule entirely.
+
+- **Two lines, always.** `add-hijack <domain> <ipv4> [ipv6]`
+  now writes the A answer and an AAAA answer through one
+  helper. With no IPv6 given, AAAA is answered locally as
+  `::` — proven against the real SmartDNS binary in the
+  static suite (A returns the relay IPv4, AAAA returns `::`,
+  no upstream leak). With a real IPv6, both stacks land on
+  the relay.
+- **Bulk import.** `add-hijack --file domains.txt <ipv4>
+  [ipv6]` applies the same dual-stack rule to a service's
+  whole domain list with a single reload at the end.
+- **Docs.** docs/HIJACK.fa.md explains the model: only the
+  names the operator lists are answered locally; everything
+  else resolves normally.
+
 ## v1.8 — 2026-11-21 (the full QUIC shelf: TUIC, AnyTLS, Hy2 hopping + Gecko)
 
 Stage 1 of the 2026-11-21 technology survey adoption plan

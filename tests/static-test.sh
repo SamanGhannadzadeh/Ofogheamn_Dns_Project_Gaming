@@ -248,14 +248,22 @@ cache-size 1024
 server 127.0.0.1:9
 address /hash.example/#
 address /empty.example/
+address /hij.example/203.0.113.10
+address /hij.example/::
 EOF
   "$SD_BIN" -f -c "$M/c.conf" -p "$M/pid" >"$M/run.log" 2>&1 &
   PID=$!; sleep 2
   H="$(dig +tcp +time=3 +tries=1 @127.0.0.1 -p 15354 hash.example A 2>/dev/null | awk '/status:/{print $6}' | tr -d ,)"
   E="$(dig +tcp +time=3 +tries=1 @127.0.0.1 -p 15354 empty.example A 2>/dev/null | awk '/status:/{print $6}' | tr -d ,)"
+  HA="$(dig +tcp +time=3 +tries=1 @127.0.0.1 -p 15354 hij.example A 2>/dev/null | awk '/^hij\.example\./{print $5}')"
+  HV="$(dig +tcp +time=3 +tries=1 @127.0.0.1 -p 15354 hij.example AAAA 2>/dev/null | awk '/^hij\.example\./{print $5}')"
   kill "$PID" 2>/dev/null; wait "$PID" 2>/dev/null
   [ "$H" = "NXDOMAIN" ]; chk "address /domain/# answers NXDOMAIN locally" $?
   [ "$E" != "NXDOMAIN" ]; chk "address /domain/ (empty) does NOT answer locally" $?
+  [ "$HA" = "203.0.113.10" ]; chk "hijack A answered locally with the relay IPv4" $?
+  [ "$HV" = "::" ]; chk "hijack AAAA answered locally (::) - no upstream leak" $?
+  has scripts/ofogheamn-dns 'hijack_set'
+  chk "CLI writes hijack rules through the dual-stack helper" $?
 else
   echo "SKIP  smartdns binary unavailable (offline?) — config tests skipped"
 fi
