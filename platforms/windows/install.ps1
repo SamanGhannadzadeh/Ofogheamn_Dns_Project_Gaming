@@ -9,7 +9,7 @@ $AGH_VER = "v0.107.80"
 $SINGBOX_VER = "1.14.4"
 $Root = "C:\Program Files\OfogheamnDNS"
 $Data = "C:\ProgramData\OfogheamnDNS"
-$RepoRoot = (Resolve-Path "$PSScriptRoot\..\..\..").Path
+$RepoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
 
 Write-Host "== Ofogheamn DNS node for Windows ==" -ForegroundColor Cyan
 New-Item -ItemType Directory -Force -Path $Root, $Data | Out-Null
