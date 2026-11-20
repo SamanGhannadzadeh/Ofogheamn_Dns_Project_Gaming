@@ -113,6 +113,8 @@ ofogheamn-dns proxy users
 
 **پایش آپ‌استریم:** چک سلامت (`ofogheamn-dns health`) حالا زنده‌بودن تک‌تک آپ‌استریم‌های کانفیگ را هم می‌سنجد و مرده‌ها را با نام گزارش می‌کند — آپ‌استریم مردهٔ بی‌صدا دیگر هر لوک‌آپ سرد را معطل نمی‌کند.
 
+**همهٔ فرمان‌های `ofogheamn-dns`:** `status`، `start`، `stop`، `restart`، `logs`، `health`، `test`، `mode`، `allow`، `proxy`، `console`، `reality`، `vpn`، `wg`، `mesh`، `panel`، `panel-password`، `game`، `add-game`، `remove-game`، `list-games`، `cod`، `cod-test`، `warmup`، `add-hijack`، `remove-hijack`، `list-hijack`، `bench`، `region`، `firewall`، `backup`، `restore`، `update`، `menu`
+
 ## تونل گیمینگ — دستگاه ← سرور تو ← بازی | Gaming tunnel
 
 DNS به‌تنهایی ترافیک بازی را حمل نمی‌کند؛ برای این‌که بازی واقعاً از سرور تو رد شود، پروژه یک **تونل WireGuard** هم دارد:
