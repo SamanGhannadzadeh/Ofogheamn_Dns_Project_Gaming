@@ -79,20 +79,54 @@ def write_lines(path, lines):
 
 
 # ---------------- hijack rules ----------------
+# Since v1.9 a hijack rule is a PAIR of lines (the A answer and
+# an AAAA answer — without the second line, dual-stack clients
+# leak past the rule). The panel pairs them back into one rule:
+# target = IPv4 (or cname target), target6 = real IPv6 or ""
+# with v6_blocked=True when the AAAA line is the "::" plug.
 def hijack_list():
-    rules = []
+    by, order = {}, []
     for line in read_lines(os.path.join(ETC, "hijack.conf")):
         m = re.match(r"^(address|cname)\s+/([^/]+)/(.+)$", line.strip())
-        if m:
-            rules.append({"type": m.group(1), "domain": m.group(2), "target": m.group(3)})
-    return rules
+        if not m:
+            continue
+        typ, dom, tgt = m.groups()
+        if dom not in by:
+            by[dom] = {"type": typ, "domain": dom, "target": "",
+                       "target6": "", "v6_blocked": False}
+            order.append(dom)
+        rule = by[dom]
+        if typ == "cname":
+            rule["type"] = "cname"
+            rule["target"] = tgt
+            continue
+        try:
+            is6 = ipaddress.ip_address(tgt).version == 6
+        except ValueError:
+            is6 = False
+        if is6:
+            if tgt == "::":
+                rule["v6_blocked"] = True
+            else:
+                rule["target6"] = tgt
+        else:
+            rule["target"] = tgt
+    return [by[d] for d in order]
 
 
 def hijack_save(rules):
     path = os.path.join(ETC, "hijack.conf")
     kept = [ln for ln in read_lines(path)
             if not re.match(r"^(address|cname)\s+/", ln.strip())]
-    kept += [f"{r['type']} /{r['domain']}/{r['target']}" for r in rules]
+    for r in rules:
+        if r["type"] == "cname":
+            kept.append(f"cname /{r['domain']}/{r['target']}")
+            continue
+        if r.get("target"):
+            kept.append(f"address /{r['domain']}/{r['target']}")
+        t6 = r.get("target6") or ("::" if r.get("target") or r.get("v6_blocked") else "")
+        if t6:
+            kept.append(f"address /{r['domain']}/{t6}")
     write_lines(path, kept)
 
 
@@ -247,6 +281,44 @@ def mesh_load_raw():
         return {}
 
 
+# ---------------- transports (v1.13: full panel parity) ----------------
+def _json_file(name):
+    try:
+        with open(os.path.join(ETC, name), encoding="utf-8") as fh:
+            return json.load(fh)
+    except Exception:
+        return None
+
+
+def transports_get():
+    """Read-only state of every optional transport, mirroring
+    the JSON state files the CLI writes. Toggling happens
+    through the CLI itself (see /api/feature) — one source of
+    truth, no second implementation to drift."""
+    t = {}
+    c = _json_file("console.json")
+    t["console"] = {"on": bool(c), "port": (c or {}).get("port", 2081)}
+    h = _json_file("hysteria2.json")
+    t["hysteria2"] = {"on": bool(h), "port": (h or {}).get("port", 443),
+                      "obfs": (h or {}).get("obfs", ""),
+                      "hop_range": (h or {}).get("hop_range", "")}
+    u = _json_file("tuic.json")
+    t["tuic"] = {"on": bool(u), "port": (u or {}).get("port", 8443)}
+    a = _json_file("anytls.json")
+    t["anytls"] = {"on": bool(a), "port": (a or {}).get("port", 8443)}
+    r = _json_file("reality.json")
+    rc = _json_file("reality-clients.json") or {}
+    t["reality"] = {"on": bool(r), "port": (r or {}).get("port", 443),
+                    "server_name": (r or {}).get("server_name", ""),
+                    "public_key": rc.get("public_key", ""),
+                    "short_id": rc.get("short_id", ""),
+                    "clients": rc.get("clients", [])}
+    rec = any(ln.startswith("server ")
+              for ln in read_lines(os.path.join(ETC, "recursive.conf")))
+    t["recursive"] = {"on": rec, "port": 5335}
+    return t
+
+
 def top_domains(n=12):
     path = os.path.join(LOGDIR, "smartdns.log")
     counts = {}
@@ -311,6 +383,7 @@ def status():
         "mesh_enabled": mesh_get()["enabled"],
         "mesh_best": (mesh_get()["state"] or {}).get("best", ""),
         "mesh_service": svc_state("ofogheamn-mesh"),
+        "transports": transports_get(),
     }
 
 
@@ -453,6 +526,15 @@ class Handler(BaseHTTPRequestHandler):
                                             "out": (out.stdout + out.stderr)[-800:]})
                 except Exception as exc:
                     return self._json(200, {"ok": False, "out": str(exc)})
+            if act in ("region", "bench", "backup"):
+                limit = 240 if act == "bench" else 120
+                try:
+                    out = subprocess.run(["ofogheamn-dns", act],
+                                         capture_output=True, text=True, timeout=limit)
+                    return self._json(200, {"ok": out.returncode == 0,
+                                            "out": (out.stdout + out.stderr)[-2000:]})
+                except Exception as exc:
+                    return self._json(200, {"ok": False, "out": str(exc)})
             return self._json(400, {"error": "bad action"})
 
         if path == "/api/mesh":
@@ -533,8 +615,17 @@ class Handler(BaseHTTPRequestHandler):
                 if not DOMAIN_RE.match(tgt):
                     return self._json(400, {"error": "target must be an IP or a domain (cname)"})
                 rtype = "cname"
+            t6 = str(data.get("target6", "")).strip()
+            if t6:
+                try:
+                    if ipaddress.ip_address(t6).version != 6:
+                        raise ValueError
+                except ValueError:
+                    return self._json(400, {"error": "target6 must be an IPv6 address"})
             rules = [r for r in hijack_list() if r["domain"] != dom]
-            rules.append({"type": rtype, "domain": dom, "target": tgt})
+            rules.append({"type": rtype, "domain": dom, "target": tgt,
+                          "target6": t6 if rtype == "address" else "",
+                          "v6_blocked": False})
             hijack_save(rules)
             ok, out = svc_do("restart", "ofogheamn-dns")
             return self._json(200, {"ok": ok, "out": out, "rules": rules})
@@ -615,6 +706,81 @@ class Handler(BaseHTTPRequestHandler):
             ok, out = svc_do("restart", "ofogheamn-proxy")
             return self._json(200, {"ok": ok, "out": out,
                                     "users": [u["user"] for u in users]})
+
+        if path == "/api/feature":
+            # Every optional transport is toggled by the CLI —
+            # the panel is a remote control, never a second
+            # implementation (the v1.4 lesson).
+            feat = str(data.get("feature", ""))
+            op = str(data.get("op", ""))
+            if feat not in ("console", "hysteria2", "tuic", "anytls",
+                            "reality", "recursive"):
+                return self._json(400, {"error": "bad feature"})
+            if op not in ("enable", "disable", "hop", "obfs"):
+                return self._json(400, {"error": "bad op"})
+            args = ["ofogheamn-dns", feat, op]
+            if op == "enable" and data.get("port"):
+                try:
+                    port = int(data["port"])
+                    if not 1 <= port <= 65535:
+                        raise ValueError
+                except (TypeError, ValueError):
+                    return self._json(400, {"error": "bad port"})
+                args.append(str(port))
+            if feat == "hysteria2" and op == "hop":
+                rng = str(data.get("range", "")).strip()
+                if rng != "off" and not re.match(r"^\d{2,5}-\d{2,5}$", rng):
+                    return self._json(400, {"error": "bad range"})
+                args.append(rng)
+            if feat == "hysteria2" and op == "obfs":
+                if data.get("obfs") not in ("gecko", "salamander", "off"):
+                    return self._json(400, {"error": "bad obfs"})
+                args.append(str(data["obfs"]))
+            if op in ("hop", "obfs") and feat != "hysteria2":
+                return self._json(400, {"error": "hop/obfs are hysteria2-only"})
+            try:
+                out = subprocess.run(args, capture_output=True, text=True, timeout=90)
+                return self._json(200, {"ok": out.returncode == 0,
+                                        "out": (out.stdout + out.stderr)[-1200:]})
+            except Exception as exc:
+                return self._json(200, {"ok": False, "out": str(exc)})
+
+        if path == "/api/vpn-creds":
+            op = data.get("op")
+            if op == "user":
+                u, p = str(data.get("user", "")), str(data.get("pass", ""))
+                if not USER_RE.match(u) or len(p) < 4:
+                    return self._json(400, {"error": "bad user or short password"})
+                args = ["ofogheamn-dns", "vpn", "set-user", u, p]
+            elif op == "psk":
+                psk = str(data.get("psk", ""))
+                if len(psk) < 4:
+                    return self._json(400, {"error": "short psk"})
+                args = ["ofogheamn-dns", "vpn", "set-psk", psk]
+            else:
+                return self._json(400, {"error": "bad op"})
+            try:
+                out = subprocess.run(args, capture_output=True, text=True, timeout=60)
+                return self._json(200, {"ok": out.returncode == 0,
+                                        "out": (out.stdout + out.stderr)[-600:]})
+            except Exception as exc:
+                return self._json(200, {"ok": False, "out": str(exc)})
+
+        if path == "/api/password":
+            cur = hashlib.sha256(str(data.get("current", "")).encode()).hexdigest()
+            want = conf_get("password_hash")
+            if not want or not secrets.compare_digest(cur, want):
+                return self._json(403, {"error": "current password wrong"})
+            new = str(data.get("new", ""))
+            if len(new) < 8:
+                return self._json(400, {"error": "new password too short (min 8)"})
+            path_conf = os.path.join(ETC, "panel.conf")
+            lines = [ln for ln in read_lines(path_conf)
+                     if not ln.startswith("password_hash=")]
+            lines.append("password_hash=" + hashlib.sha256(new.encode()).hexdigest())
+            write_lines(path_conf, lines)
+            os.chmod(path_conf, 0o600)
+            return self._json(200, {"ok": True})
         return self._json(404, {"error": "not found"})
 
 
@@ -674,6 +840,7 @@ pre{background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:10
     <button data-t="domains">دامنه‌های گیمینگ</button>
     <button data-t="mode">حالت عمومی / خصوصی</button>
     <button data-t="proxy">پروکسی</button>
+    <button data-t="transports">ترنسپورت‌ها</button>
     <button data-t="wg">تونل گیمینگ (WireGuard)</button>
     <button data-t="vpn">VPN ‏(L2TP/PPTP)</button>
     <button data-t="mesh">مش (اتصال نودها)</button>
@@ -687,16 +854,34 @@ pre{background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:10
       <button class="act" onclick="act('restart-proxy')">ری‌استارت پروکسی</button>
       <button class="act" onclick="act('warmup')">گرم‌کردن کش کالاف</button>
       <button class="act" onclick="act('cod-test')">تست زندهٔ کالاف</button>
+      <button class="act" onclick="act('region')">گزارش منطقه</button>
+      <button class="act" onclick="act('bench')">بنچمارک</button>
+      <button class="act" onclick="act('backup')">پشتیبان‌گیری</button>
       <button class="act" onclick="act('update-blocklist')">به‌روزرسانی لیست مسدودی</button>
       <button class="act" onclick="act('apply-firewall')">اعمال دوبارهٔ فایروال</button>
     </div>
     <h3>پرتکرارترین دامنه‌ها (از لاگ)</h3><div id="tops"></div>
     <pre id="out"></pre>
+    <h3>تغییر رمز مدیر پنل</h3>
+    <div class="row"><input type="password" id="pw-cur" placeholder="رمز فعلی"><input type="password" id="pw-new" placeholder="رمز تازه (حداقل ۸ حرف)"></div>
+    <button class="act" onclick="pwChange()">تغییر رمز</button>
+  </section>
+
+  <section id="s-transports">
+    <p class="sub">همهٔ مسیرهای ورودی اختیاری نود از همین‌جا کنترل می‌شوند؛ پنل فقط ریموتِ همان فرمان‌های CLI است و منطق دومی ندارد. روشن‌کردن هر کدام، پورتش را هم در فایروال (طبق حالت عمومی/خصوصی) باز می‌کند.</p>
+    <div id="t-list"></div>
+    <h3>هایستریا۲ — تنظیمات پیشرفته</h3>
+    <div class="row"><input id="t-hop" placeholder="بازهٔ هاپ، مثل 20000-30000 یا off" dir="ltr"><button class="act" onclick="featureOp('hysteria2','hop')">اعمال هاپ</button></div>
+    <div class="row"><select id="t-obfs"><option value="gecko">Gecko (پیشنهاد پژوهش ۲۰۲۶)</option><option value="salamander">Salamander</option><option value="off">بدون ابهام</option></select><button class="act" onclick="featureOp('hysteria2','obfs')">اعمال ابهام</button></div>
+    <h3>REALITY — اطلاعات اتصال کلاینت</h3>
+    <pre id="t-reality"></pre>
+    <pre id="t-out"></pre>
   </section>
 
   <section id="s-hijack">
-    <div class="row"><input id="h-dom" placeholder="domain.com"><input id="h-tgt" placeholder="IP یا دامنهٔ مقصد"></div>
+    <div class="row"><input id="h-dom" placeholder="domain.com"><input id="h-tgt" placeholder="IP یا دامنهٔ مقصد"><input id="h-tgt6" placeholder="IPv6 مقصد (اختیاری)"></div>
     <button class="act" onclick="hijackAdd()">افزودن قانون</button>
+    <p class="sub">هر قانون دوستونی ذخیره می‌شود: اگر IPv6 ندهی، ستون AAAA با :: بسته می‌شود تا کلاینت دوستونی از کنار قانون رد نشود.</p>
     <table id="h-table"></table>
   </section>
 
@@ -737,6 +922,10 @@ pre{background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:10
     <p id="vpn-info"></p>
     <table id="vpn-table"></table>
     <div style="margin-top:10px"><button class="act" onclick="act('restart-vpn')">ری‌استارت VPN</button></div>
+    <h3>تغییر اعتبار VPN</h3>
+    <div class="row"><input id="v-user" placeholder="نام کاربری تازه"><input id="v-pass" placeholder="رمز تازه"></div>
+    <button class="act" onclick="vpnCreds('user')">ذخیرهٔ نام کاربری و رمز</button>
+    <div class="row"><input id="v-psk" placeholder="PSK تازه"><button class="act" onclick="vpnCreds('psk')">ذخیرهٔ PSK</button></div>
     <p class="sub">⚠️ <b>هشدار:</b> نام کاربری، رمز و PSK پیش‌فرض عمومی‌اند و هر کسی می‌داند؛ قبل از استفادهٔ واقعی حتماً عوضشان کن: <span dir="ltr">ofogheamn-dns vpn set-user &lt;user&gt; &lt;pass&gt;</span> و <span dir="ltr">ofogheamn-dns vpn set-psk &lt;new&gt;</span> — فایل مرجع: <span dir="ltr">/etc/ofogheamn-dns/vpn.conf</span>. PPTP ذاتاً ضعیف است؛ هر جا L2TP/IPsec می‌شود، همان را استفاده کن.</p>
   </section>
 
@@ -786,7 +975,13 @@ async function refresh(){try{const s=await api('/api/status');
   '<div class="card">دامنهٔ کالاف<b>'+s.cod_count+'</b></div>'+
   '<div class="card">دامنهٔ گیمینگ<b>'+s.gaming_count+'</b></div>'+
   '<div class="card">دامنهٔ مسدود<b>'+(s.blocklist_count||0)+'</b></div>'+
-  '<div class="card">مش<b>'+(s.mesh_enabled?('روشن — خروجی: '+(s.mesh_best||'…')):'خاموش')+'</b></div>';
+  '<div class="card">مش<b>'+(s.mesh_enabled?('روشن — خروجی: '+(s.mesh_best||'…')):'خاموش')+'</b></div>'+
+  '<div class="card">ترنسپورت‌های روشن<b>'+Object.values(s.transports||{}).filter(f=>f.on).length+' از ۶</b></div>';
+ const T=s.transports||{};
+ const feats=[['console','پروکسی کنسول (بدون رمز، PS5)'],['hysteria2','Hysteria2'],['tuic','TUIC'],['anytls','AnyTLS'],['reality','REALITY ‏(VLESS)'],['recursive','بک‌اند بازگشتی Unbound']];
+ $('t-list').innerHTML='<table>'+feats.map(([k,label])=>{const f=T[k]||{};return '<tr><td>'+label+'</td><td>'+(f.on?('<span class="ok">روشن</span> — پورت '+f.port+(k==='hysteria2'&&f.obfs?(' — ابهام: '+f.obfs):'')+(k==='hysteria2'&&f.hop_range?(' — هاپ: '+f.hop_range):'')):('<span class="bad">خاموش</span>'))+'</td><td>'+(f.on?('<button class="ghost" onclick="featureOp(\''+k+'\',\'disable\')">خاموش‌کردن</button>'):('<button class="ghost" onclick="featureOp(\''+k+'\',\'enable\')">روشن‌کردن</button>'))+'</td></tr>'}).join('')+'</table>';
+ const R=T.reality||{};
+ $('t-reality').textContent=R.on?('نام سرور پوششی: '+(R.server_name||'')+' — پورت: '+R.port+'\nکلید عمومی: '+(R.public_key||'')+'\nShort ID: '+(R.short_id||'')+'\nکلاینت‌ها (UUID هر کاربر پروکسی):\n'+(R.clients||[]).map(c=>'  '+c.user+': '+c.uuid).join('\n')):'REALITY خاموش است.';
  try{const h=await api('/api/health');
   $('cards').innerHTML+=
    '<div class="card">سلامت نود<b>'+(h.healthy?'<span class="ok">سالم</span>':'<span class="bad">'+(h.problems||[]).join('، ')+'</span>')+'</b></div>'+
@@ -818,8 +1013,11 @@ async function meshKey(){const r=await api('/api/mesh',{method:'POST',body:JSON.
 async function meshPeerAdd(){const r=await api('/api/mesh',{method:'POST',body:JSON.stringify({op:'add-peer',name:$('mp-name').value,endpoint:$('mp-endpoint').value,pubkey:$('mp-pub').value,mesh_ip:$('mp-ip').value})});msg(r.error||'همتا افزوده شد');refresh()}
 async function meshPeerDel(n){await api('/api/mesh',{method:'POST',body:JSON.stringify({op:'del-peer',name:n})});refresh()}
 async function act(a){msg('در حال اجرا...');const r=await api('/api/action',{method:'POST',body:JSON.stringify({action:a})});$('out').textContent=r.out||'';msg(r.ok?'انجام شد':'خطا');refresh()}
-async function loadHijack(){const r=await api('/api/hijack');$('h-table').innerHTML=r.rules.map(x=>'<tr><td>'+x.domain+'</td><td>'+x.target+'</td><td><button class="ghost" onclick="hijackDel(\''+x.domain+'\')">حذف</button></td></tr>').join('')}
-async function hijackAdd(){const r=await api('/api/hijack',{method:'POST',body:JSON.stringify({domain:$('h-dom').value,target:$('h-tgt').value})});msg(r.error||'ذخیره شد');loadHijack();refresh()}
+async function loadHijack(){const r=await api('/api/hijack');$('h-table').innerHTML=r.rules.map(x=>'<tr><td>'+x.domain+'</td><td>'+x.target+(x.target6?(' + '+x.target6):(x.v6_blocked?' (IPv6 بسته)':''))+'</td><td><button class="ghost" onclick="hijackDel(\''+x.domain+'\')">حذف</button></td></tr>').join('')}
+async function hijackAdd(){const r=await api('/api/hijack',{method:'POST',body:JSON.stringify({domain:$('h-dom').value,target:$('h-tgt').value,target6:$('h-tgt6').value})});msg(r.error||'ذخیره شد');loadHijack();refresh()}
+async function featureOp(f,op){const body={feature:f,op:op};if(op==='hop')body.range=$('t-hop').value;if(op==='obfs')body.obfs=$('t-obfs').value;msg('در حال اجرا...');const r=await api('/api/feature',{method:'POST',body:JSON.stringify(body)});const el=$('t-out');if(el)el.textContent=r.out||'';msg(r.ok?'انجام شد':(r.error||'خطا'));refresh()}
+async function pwChange(){const r=await api('/api/password',{method:'POST',body:JSON.stringify({current:$('pw-cur').value,new:$('pw-new').value})});msg(r.ok?'رمز عوض شد':(r.error||'خطا'))}
+async function vpnCreds(op){const body=op==='user'?{op:op,user:$('v-user').value,pass:$('v-pass').value}:{op:op,psk:$('v-psk').value};const r=await api('/api/vpn-creds',{method:'POST',body:JSON.stringify(body)});msg(r.ok?'ذخیره شد':(r.error||'خطا'));refresh()}
 async function hijackDel(d){const r=await api('/api/hijack/delete',{method:'POST',body:JSON.stringify({domain:d})});loadHijack();refresh()}
 async function loadDomains(){const l=$('d-list').value;const r=await api('/api/domains?list='+l);$('d-table').innerHTML=r.domains.map(d=>'<tr><td>'+d+'</td><td><button class="ghost" onclick="domDel(\''+d+'\')">حذف</button></td></tr>').join('')}
 async function domAdd(){const r=await api('/api/domains',{method:'POST',body:JSON.stringify({list:$('d-list').value,domain:$('d-dom').value,op:'add'})});msg(r.error||'افزوده شد');loadDomains();refresh()}

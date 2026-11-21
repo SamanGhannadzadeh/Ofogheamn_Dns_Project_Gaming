@@ -197,6 +197,48 @@ OFOGH_ETC="$CT" python3 scripts/gen-singbox-config.py >/dev/null 2>"$CT/err"
 [ $? -ne 0 ]; chk "same transport+port (tuic udp 443 vs hy2 udp 443) is refused" $?
 grep -q "port collision" "$CT/err"; chk "the refusal names the collision" $?
 rm -rf "$CT"
+
+echo "== panel functional (v1.13) =="
+PT="$(mktemp -d)"
+cat > "$PT/hijack.conf" <<'EOF'
+# comment
+address /pair.example/203.0.113.10
+address /pair.example/::
+cname /alias.example/target.example.com
+nameserver /routed.example/gaming
+address /sink.example/-
+EOF
+printf '{"port": 2081}' > "$PT/console.json"
+printf 'server 127.0.0.1:5335 -group recursive\n' > "$PT/recursive.conf"
+OFOGH_ETC="$PT" PT="$PT" python3 - <<'EOF'
+import importlib.util, os, sys
+spec = importlib.util.spec_from_file_location("panel", "panel/panel.py")
+panel = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(panel)
+rules = {r["domain"]: r for r in panel.hijack_list()}
+assert len(rules) == 3, rules
+pair = rules["pair.example"]
+assert pair["target"] == "203.0.113.10" and pair["v6_blocked"], pair
+assert rules["alias.example"]["type"] == "cname"
+assert rules["sink.example"]["target"] == "-"
+panel.hijack_save(panel.hijack_list())
+text = open(os.path.join(os.environ["PT"], "hijack.conf")).read()
+assert "address /pair.example/203.0.113.10" in text, text
+assert "address /pair.example/::" in text, text
+assert "nameserver /routed.example/gaming" in text, text
+t = panel.transports_get()
+assert t["console"]["on"] and t["console"]["port"] == 2081, t
+assert t["recursive"]["on"] and not t["tuic"]["on"], t
+print("panel functional OK")
+EOF
+chk "panel pairs dual-stack hijack rules and reads transport state" $?
+has panel/panel.py '/api/feature'
+chk "panel exposes the feature toggle route" $?
+has panel/panel.py '/api/vpn-creds'
+chk "panel exposes VPN credential control" $?
+has panel/panel.py '/api/password'
+chk "panel exposes admin password change" $?
+rm -rf "$PT"
 # CLI update hardcoded the amd64 sing-box asset (broke ARM nodes).
 hasnot scripts/ofogheamn-dns 'linux-amd64\.tar\.gz'
 chk "CLI update has no hardcoded linux-amd64 tarball" $?

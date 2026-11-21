@@ -1,3 +1,29 @@
+## v1.13 — 2026-11-21 (panel parity: every feature, one remote)
+
+The panel now controls everything the CLI does. It stays a
+remote control — every toggle shells out to the CLI, the
+single source of truth (the v1.4 lesson: a second
+implementation in the panel once silently dropped REALITY).
+
+- **Transports tab**: console proxy, Hysteria2 (plus port
+  hopping and Gecko/Salamander obfs controls), TUIC,
+  AnyTLS, REALITY (with the client connection info: cover
+  name, public key, short ID, per-user UUIDs) and the
+  recursive back-end — state read from the same JSON files
+  the CLI writes, toggles executed by the CLI.
+- **Dashboard**: transports-on card, and region / bench /
+  backup actions next to the existing ones.
+- **VPN tab**: change the VPN user/password and the PSK
+  from the panel (via `vpn set-user` / `vpn set-psk`).
+- **Admin password** can be changed from the dashboard
+  (current-password verified, hash-only storage as before).
+- **Hijack tab fixed for the dual-stack era**: since v1.9
+  a rule is an A+AAAA pair of lines; the panel used to list
+  the AAAA "::" plug as a second bogus rule. Rules are now
+  paired (with an optional real IPv6 field), and saving
+  writes both lines back — proven by a functional test that
+  round-trips a CLI-written hijack.conf through the panel.
+
 ## v1.12 — 2026-11-21 (debug & hardening pass)
 
 A full audit with the real binaries, not just static greps:
