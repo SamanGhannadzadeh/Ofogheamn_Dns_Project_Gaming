@@ -174,6 +174,22 @@ def main() -> int:
                 "key_path": os.path.join(ETC, "tls", "privkey.pem"),
             },
         })
+    # Port-collision guard (v1.12): two inbounds sharing a
+    # transport+port only fail when sing-box STARTS — after the
+    # operator already restarted the service. Refuse here, with
+    # the tags named, while the old config is still on disk.
+    transports = {"mixed": ("tcp", "udp"), "hysteria2": ("udp",),
+                  "tuic": ("udp",), "anytls": ("tcp",), "vless": ("tcp",)}
+    seen = {}
+    for ib in inbounds:
+        for proto in transports.get(ib.get("type"), ("tcp",)):
+            key = (proto, ib.get("listen_port"))
+            if key in seen:
+                print(f"error: port collision — {seen[key]} and "
+                      f"{ib.get('tag')} both want {proto}/{ib.get('listen_port')}; "
+                      "change one port and retry", file=sys.stderr)
+                return 1
+            seen[key] = ib.get("tag")
     cfg = {
         "log": {
             "level": "info",

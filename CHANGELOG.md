@@ -1,3 +1,25 @@
+## v1.12 — 2026-11-21 (debug & hardening pass)
+
+A full audit with the real binaries, not just static greps:
+
+- **sing-box 1.14.4 `check`** passes on the generated config
+  with EVERY inbound on at once (mixed, console, Hysteria2 +
+  Gecko, TUIC, AnyTLS, REALITY) and on the plain config.
+- **SmartDNS (Release48)** starts and answers with every
+  optional include populated at once — including the
+  recursive include pointing at a dead Unbound (a down
+  back-end must never take the front door down with it).
+- **unbound-checkconf** validates the shipped unbound.conf.
+- **ShellCheck** (error + warning level) and **pyflakes**
+  are clean across every shell and Python file in the repo.
+- **New: generator port-collision guard.** Two inbounds
+  sharing a transport+port previously failed only when
+  sing-box started — after the service restart. The
+  generator now refuses, naming both tags, while the old
+  config is still on disk. Same port on different
+  transports (TUIC UDP 8443 + AnyTLS TCP 8443, the shipped
+  defaults) stays legal and is covered by a test.
+
 ## v1.11 — 2026-11-21 (frontier platform + evaluations; survey stage 3)
 
 - **AmneziaWG platform (experimental).** `platforms/amneziawg/`

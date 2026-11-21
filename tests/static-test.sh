@@ -183,6 +183,20 @@ grep -q "PrivateKey = AAAA" "$AT/awg.conf"; chk "awgify preserves the interface 
 python3 platforms/amneziawg/awgify.py "$AT/wg.conf" --params "$AT/p.json" > "$AT/awg2.conf" 2>/dev/null
 cmp -s "$AT/awg.conf" "$AT/awg2.conf"; chk "awgify reuses shared params identically (both ends match)" $?
 rm -rf "$AT"
+
+echo "== generator port-collision guard (v1.12) =="
+CT="$(mktemp -d)"
+printf '[{"user":"t","pass":"t"}]' > "$CT/proxy-users.json"
+echo '{"port": 443, "password": "x"}' > "$CT/hysteria2.json"
+echo '{"port": 8443, "uuid": "11111111-2222-3333-4444-555555555555", "password": "y"}' > "$CT/tuic.json"
+echo '{"port": 8443, "password": "z"}' > "$CT/anytls.json"
+OFOGH_ETC="$CT" python3 scripts/gen-singbox-config.py >/dev/null 2>&1
+chk "same port on different transports (tuic udp + anytls tcp) is allowed" $?
+echo '{"port": 443, "uuid": "11111111-2222-3333-4444-555555555555", "password": "y"}' > "$CT/tuic.json"
+OFOGH_ETC="$CT" python3 scripts/gen-singbox-config.py >/dev/null 2>"$CT/err"
+[ $? -ne 0 ]; chk "same transport+port (tuic udp 443 vs hy2 udp 443) is refused" $?
+grep -q "port collision" "$CT/err"; chk "the refusal names the collision" $?
+rm -rf "$CT"
 # CLI update hardcoded the amd64 sing-box asset (broke ARM nodes).
 hasnot scripts/ofogheamn-dns 'linux-amd64\.tar\.gz'
 chk "CLI update has no hardcoded linux-amd64 tarball" $?
