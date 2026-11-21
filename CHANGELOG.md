@@ -1,3 +1,9 @@
+## v1.17.1 — 2026-11-21 (correction)
+
+- IPv6 through SOCKS is dual-stack **without preference**: the
+  `prefer_ipv6` outbound strategy briefly shipped in v1.17 is
+  removed again — IPv6 is simply active alongside IPv4.
+
 ## v1.17 — 2026-11-21 (Iran-DPI research round)
 
 - **Parallel Hysteria2+Gecko inbound** (`ofogheamn-dns hysteria2-gecko
@@ -12,10 +18,12 @@
   configured nor encouraged — it does not resemble real HTTP/3.
 - **TUIC 0-RTT is now OFF** (`zero_rtt_handshake: false`): replay
   risk per the sing-box docs; two independent reviews agreed.
-- **SOCKS passes IPv6**: the direct outbound prefers IPv6 for
-  domain targets (`domain_strategy: prefer_ipv6`, IPv4 fallback
-  kept), complementing the dual-stack listeners and SmartDNS
-  dual-stack selection that were already on.
+- **SOCKS passes IPv6 alongside IPv4, with no preference either
+  way** (wording corrected in v1.17.1): dual-stack listeners,
+  SmartDNS dual-stack selection and the client TUN's IPv6 address
+  were already on; the last IPv4-only client settings are removed
+  so IPv6 literals and AAAA-only hosts work through the proxy
+  while IPv4 behaviour is unchanged.
 
 ## v1.16 — 2026-11-21 (consultation round: durability + ECS depth)
 

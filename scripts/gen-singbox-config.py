@@ -242,8 +242,7 @@ def main() -> int:
         },
         "inbounds": inbounds,
         "outbounds": [{"type": "direct", "tag": "direct",
-                       "tcp_fast_open": True,
-                       "domain_strategy": "prefer_ipv6"}],
+                       "tcp_fast_open": True}],
         "route": {"final": "direct"},
     }
     out = os.path.join(ETC, "singbox.json")
