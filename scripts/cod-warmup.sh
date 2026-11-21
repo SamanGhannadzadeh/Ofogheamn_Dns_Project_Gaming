@@ -21,10 +21,13 @@ GAMING=/etc/ofogheamn-dns/lists/gaming.domains
       grep -vE '^\s*(#|$)' "$GAMING" | awk -v q="$quarter" 'NR % 4 == q'
     fi
   fi
-} | sort -u | while read -r d; do
-  dig +short +time=2 +tries=1 @127.0.0.1 "$d" A >/dev/null 2>&1
-  dig +short +time=2 +tries=1 @127.0.0.1 "$d" AAAA >/dev/null 2>&1
+} | sort -u | xargs -P 8 -I{} sh -c '
+  dig +short +time=2 +tries=1 @127.0.0.1 "{}" A >/dev/null 2>&1
+  dig +short +time=2 +tries=1 @127.0.0.1 "{}" AAAA >/dev/null 2>&1
   # a couple of well-known live subdomains per apex
-  dig +short +time=2 +tries=1 @127.0.0.1 "www.$d" A >/dev/null 2>&1
-done
+  dig +short +time=2 +tries=1 @127.0.0.1 "www.{}" A >/dev/null 2>&1
+'
+# Parallel since v1.14: the serial loop took minutes of
+# wall-clock on big lists, so late entries were warmed long
+# after early ones had already cooled again.
 exit 0

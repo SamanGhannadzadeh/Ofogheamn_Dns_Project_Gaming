@@ -1,3 +1,32 @@
+## v1.14 — 2026-11-21 (micro pass: warm path measured, bypass closed)
+
+- **Warm path, measured.** With the shipped config running
+  against a local fake upstream (300 warm queries, loopback):
+  median **0.032 ms**, p95 0.067 ms. The in-server hot path
+  is already ~6x under the 0.2 ms ambition; log-level error
+  shaves it to 0.025 ms but kills the query log the panel's
+  top-domains view reads, so `info` stays — the remaining
+  latency for players is network RTT, not resolver config.
+- **Warmer is parallel.** cod-warmup.sh ran ~600 digs
+  serially; late entries were warmed minutes after early
+  ones had cooled. Now xargs -P 8 — the whole list lands
+  inside one freshness window.
+- **All-requests-through-DNS, resolver layer.** New
+  `config/doh-resolvers.conf` (wired like recursive.conf):
+  the public encrypted-DNS service names — dns.google,
+  Quad9, AdGuard, CleanBrowsing, NextDNS, Firefox's and
+  Chrome's built-in DoH hostnames, DoH.pub, AliDNS, dns0,
+  CIRA, OpenDNS — answer NXDOMAIN on the node, so a
+  subscriber app cannot bootstrap a DoH bypass around it
+  and falls back to the node's DNS. One deliberate
+  exception, documented in the file: cloudflare-dns.com,
+  the node's own DoH upstream hostname. The suite proves
+  the sinkhole live against the shipped config — which
+  caught the first cut using the documented "-" NXDOMAIN
+  form: Release48.5 does not answer it locally (the "#"
+  form is the load-bearing one, same lesson as v1.4). The
+  stale "-" hint in hijack.conf's header is corrected too.
+
 ## v1.13 — 2026-11-21 (panel parity: every feature, one remote)
 
 The panel now controls everything the CLI does. It stays a

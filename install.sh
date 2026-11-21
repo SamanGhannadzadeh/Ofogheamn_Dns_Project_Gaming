@@ -108,6 +108,7 @@ cp "$SRC_DIR/config/force-dns.conf" "$ETC/force-dns.conf"
 cp "$SRC_DIR/config/mesh-upstream.conf" "$ETC/mesh-upstream.conf"
 # smartdns.conf includes this file too; missing = fatal (same rule)
 cp "$SRC_DIR/config/recursive.conf" "$ETC/recursive.conf"
+cp "$SRC_DIR/config/doh-resolvers.conf" "$ETC/doh-resolvers.conf"
 cp "$SRC_DIR/config/unbound.conf" "$ETC/unbound.conf"
 cp "$SRC_DIR/config/lists/gaming.domains" "$ETC/lists/gaming.domains"
 cp "$SRC_DIR/config/lists/cod.domains" "$ETC/lists/cod.domains"

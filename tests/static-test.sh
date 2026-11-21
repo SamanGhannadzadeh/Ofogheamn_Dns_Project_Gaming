@@ -296,7 +296,7 @@ if curl -fsSL --max-time 90 -o "$SD_BIN" \
       -e 's#^bind-tls \[::\]:853#bind-tls 127.0.0.1:15853#' \
       -e 's#^bind-https \[::\]:443#bind-https 127.0.0.1:15443#' \
       config/smartdns.conf > "$T/smartdns.conf"
-  for f in hijack.conf blocklist.conf force-dns.conf mesh-upstream.conf recursive.conf; do
+  for f in hijack.conf blocklist.conf force-dns.conf mesh-upstream.conf recursive.conf doh-resolvers.conf; do
     cp "config/$f" "$T/etc/"
   done
   cp config/lists/*.domains "$T/etc/lists/"
@@ -306,6 +306,8 @@ if curl -fsSL --max-time 90 -o "$SD_BIN" \
   "$SD_BIN" -f -c "$T/smartdns.conf" -p "$T/pid" >"$T/run.log" 2>&1 &
   PID=$!; sleep 3
   kill -0 "$PID" 2>/dev/null; chk "shipped smartdns.conf starts and stays up" $?
+  DG="$(dig +tcp +time=3 +tries=1 @127.0.0.1 -p 15353 dns.google A 2>/dev/null | awk '/status:/{print $6}' | tr -d ,)"
+  [ "$DG" = "NXDOMAIN" ]; chk "public DoH name (dns.google) is sinkholed by the shipped config" $?
   kill "$PID" 2>/dev/null; wait "$PID" 2>/dev/null
   # The invariant behind three installer bugs: remove the mesh
   # include and the core must refuse to start.
