@@ -304,6 +304,10 @@ def transports_get():
                       "hop_range": (h or {}).get("hop_range", "")}
     u = _json_file("tuic.json")
     t["tuic"] = {"on": bool(u), "port": (u or {}).get("port", 8443)}
+    g = _json_file("hysteria2-gecko.json")
+    t["hysteria2-gecko"] = {"on": bool(g), "port": (g or {}).get("port", 2083)}
+    hp = _json_file("https-proxy.json")
+    t["https-proxy"] = {"on": bool(hp), "port": (hp or {}).get("port", 9443)}
     a = _json_file("anytls.json")
     t["anytls"] = {"on": bool(a), "port": (a or {}).get("port", 8443)}
     r = _json_file("reality.json")
@@ -714,7 +718,8 @@ class Handler(BaseHTTPRequestHandler):
             feat = str(data.get("feature", ""))
             op = str(data.get("op", ""))
             if feat not in ("console", "hysteria2", "tuic", "anytls",
-                            "reality", "recursive"):
+                            "reality", "recursive", "hysteria2-gecko",
+                            "https-proxy"):
                 return self._json(400, {"error": "bad feature"})
             if op not in ("enable", "disable", "hop", "obfs"):
                 return self._json(400, {"error": "bad op"})
@@ -978,7 +983,7 @@ async function refresh(){try{const s=await api('/api/status');
   '<div class="card">مش<b>'+(s.mesh_enabled?('روشن — خروجی: '+(s.mesh_best||'…')):'خاموش')+'</b></div>'+
   '<div class="card">ترنسپورت‌های روشن<b>'+Object.values(s.transports||{}).filter(f=>f.on).length+' از ۶</b></div>';
  const T=s.transports||{};
- const feats=[['console','پروکسی کنسول (بدون رمز، PS5)'],['hysteria2','Hysteria2'],['tuic','TUIC'],['anytls','AnyTLS'],['reality','REALITY ‏(VLESS)'],['recursive','بک‌اند بازگشتی Unbound']];
+ const feats=[['console','پروکسی کنسول (بدون رمز، PS5)'],['hysteria2','Hysteria2'],['hysteria2-gecko','Hysteria2 + Gecko'],['tuic','TUIC'],['anytls','AnyTLS'],['reality','REALITY ‏(VLESS)'],['https-proxy','پروکسی HTTPS ‏(HTTP روی TLS)'],['recursive','بک‌اند بازگشتی Unbound']];
  $('t-list').innerHTML='<table>'+feats.map(([k,label])=>{const f=T[k]||{};return '<tr><td>'+label+'</td><td>'+(f.on?('<span class="ok">روشن</span> — پورت '+f.port+(k==='hysteria2'&&f.obfs?(' — ابهام: '+f.obfs):'')+(k==='hysteria2'&&f.hop_range?(' — هاپ: '+f.hop_range):'')):('<span class="bad">خاموش</span>'))+'</td><td>'+(f.on?('<button class="ghost" onclick="featureOp(\''+k+'\',\'disable\')">خاموش‌کردن</button>'):('<button class="ghost" onclick="featureOp(\''+k+'\',\'enable\')">روشن‌کردن</button>'))+'</td></tr>'}).join('')+'</table>';
  const R=T.reality||{};
  $('t-reality').textContent=R.on?('نام سرور پوششی: '+(R.server_name||'')+' — پورت: '+R.port+'\nکلید عمومی: '+(R.public_key||'')+'\nShort ID: '+(R.short_id||'')+'\nکلاینت‌ها (UUID هر کاربر پروکسی):\n'+(R.clients||[]).map(c=>'  '+c.user+': '+c.uuid).join('\n')):'REALITY خاموش است.';

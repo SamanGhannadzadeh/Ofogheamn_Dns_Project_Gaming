@@ -1,3 +1,17 @@
+## v1.25 — 2026-11-21 (product scope locked: DNS + proxy, no box)
+
+- **Owner's product decision**: no gateway box in the product
+  path — nobody pays to put a device in the middle. The
+  console connects with its own settings only (node DNS +
+  its HTTP proxy field on the node's console port); phones
+  and PCs use the client configs. The gateway kit stays in
+  the repo as a documented optional extra for owners who
+  already have a Linux box.
+- **Panel parity completed for the ladder**: Hysteria2-Gecko
+  and the HTTPS proxy now appear in the panel's transports
+  tab with working enable/disable (through the CLI, as
+  always) — every transport is panel-controllable again.
+
 ## v1.24 — 2026-11-21 (the best HTTP: CONNECT over TLS)
 
 - **HTTPS proxy inbound**: `ofogheamn-dns https-proxy enable`

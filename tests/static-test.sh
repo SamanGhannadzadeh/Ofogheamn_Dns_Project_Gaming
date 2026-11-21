@@ -403,6 +403,10 @@ has scripts/ofogheamn-dns 'https-proxy'
 chk "CLI manages the HTTPS proxy" $?
 has scripts/apply-node-profile.sh 'ofogh-https-client.json'
 chk "profile emits the HTTPS proxy client" $?
+has panel/panel.py 'hysteria2-gecko'
+chk "panel controls the Gecko rung" $?
+has panel/panel.py 'https-proxy'
+chk "panel controls the HTTPS proxy" $?
 has config/smartdns.conf 'domain-set:cod/ -speed-check-mode tcp:443 -response-mode fastest-response'
 chk "cod set answers fastest-response for session setup" $?
 rm -rf "$SD_DIR"
