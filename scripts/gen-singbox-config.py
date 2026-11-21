@@ -226,6 +226,21 @@ def main() -> int:
                 "key_path": os.path.join(ETC, "tls", "privkey.pem"),
             },
         })
+    hp_file = os.path.join(ETC, "https-proxy.json")
+    if os.path.exists(hp_file):
+        with open(hp_file) as fh:
+            hp = json.load(fh)
+        inbounds.append({
+            "type": "http",
+            "tag": "ofogh-https-proxy",
+            "listen": "::",
+            "listen_port": int(hp.get("port", 9443)),
+            "tls": {
+                "enabled": True,
+                "certificate_path": os.path.join(ETC, "tls", "fullchain.pem"),
+                "key_path": os.path.join(ETC, "tls", "privkey.pem"),
+            },
+        })
     # Port-collision guard (v1.12): two inbounds sharing a
     # transport+port only fail when sing-box STARTS — after the
     # operator already restarted the service. Refuse here, with

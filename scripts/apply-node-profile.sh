@@ -97,6 +97,7 @@ PY
 [ -f "$ETC/reality.json" ] || ofogheamn-dns reality enable >/dev/null 2>&1 || true
 [ -f "$ETC/tuic.json" ] || ofogheamn-dns tuic enable >/dev/null 2>&1 || true
 [ -f "$ETC/anytls.json" ] || ofogheamn-dns anytls enable >/dev/null 2>&1 || true
+[ -f "$ETC/https-proxy.json" ] || ofogheamn-dns https-proxy enable >/dev/null 2>&1 || true
 python3 /usr/local/lib/ofogheamn-dns/gen-singbox-config.py
 sing-box check -c /etc/ofogheamn-dns/singbox.json
 
@@ -252,6 +253,21 @@ if os.path.exists(at_file):
               open("/root/ofogh-anytls-client.json", "w"), indent=1)
     group.append(aob)
 
+# The best HTTP option, for HTTP-only devices (browsers, the
+# console's web/store path): plain HTTP proxying leaves the
+# client-to-node leg readable; HTTP CONNECT over TLS encrypts
+# that leg and looks like ordinary HTTPS. TCP-only by design —
+# it is NOT part of the game ladder and carries no game UDP.
+hp_file = f"{etc}/https-proxy.json"
+if os.path.exists(hp_file):
+    hp = json.load(open(hp_file))
+    hob = {"type": "http", "tag": "proxy", "server": ip,
+           "server_port": int(hp.get("port", 9443)),
+           "tls": {"enabled": True, "insecure": True,
+                   "server_name": "ofogheamn"}}
+    json.dump(client([hob], "proxy"),
+              open("/root/ofogh-https-client.json", "w"), indent=1)
+
 # The combined client: an urltest group heals the route by itself
 # — UDP transports first, the TCP/443 REALITY rung as the fallback
 # for the hours when Iran throttles or blocks UDP outright.
@@ -297,6 +313,8 @@ ss -lun 2>/dev/null | grep -q ':8443 ' \
   && echo "PASS tuic listener udp/8443" || echo "WARN tuic listener not seen"
 ss -tln 2>/dev/null | grep -q ':8443 ' \
   && echo "PASS anytls listener tcp/8443" || echo "WARN anytls listener not seen"
+ss -tln 2>/dev/null | grep -q ':9443 ' \
+  && echo "PASS https-proxy listener tcp/9443" || echo "WARN https-proxy listener not seen"
 iptables -t nat -S 2>/dev/null | grep -q '20000' \
   && echo "PASS port-hopping NAT present" || echo "WARN port-hopping NAT not seen"
 [ -f /root/ofogh-gecko-client.json ] \

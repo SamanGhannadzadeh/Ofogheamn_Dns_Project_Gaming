@@ -437,6 +437,31 @@ PY
         echo "AnyTLS disabled" ;;
       *) [ -f /etc/ofogheamn-dns/anytls.json ] && echo "AnyTLS: on" || echo "AnyTLS: off" ;;
     esac ;;
+  https-proxy)
+    shift
+    case "${1:-status}" in
+      enable)
+        need_root
+        command -v sing-box >/dev/null || { echo "sing-box not installed"; exit 1; }
+        HPORT="${2:-9443}"
+        python3 - "$HPORT" <<'PY'
+import json, sys, os
+p = "/etc/ofogheamn-dns/https-proxy.json"
+with open(p, "w") as fh: json.dump({"port": int(sys.argv[1])}, fh)
+os.chmod(p, 0o600)
+print("https-proxy enabled on tcp/" + sys.argv[1])
+PY
+        gen_proxy
+        systemctl restart ofogheamn-proxy 2>/dev/null || true
+        bash /usr/local/bin/ofogheamn-firewall >/dev/null 2>&1 || true ;;
+      disable)
+        need_root; rm -f /etc/ofogheamn-dns/https-proxy.json
+        gen_proxy
+        systemctl restart ofogheamn-proxy 2>/dev/null || true
+        bash /usr/local/bin/ofogheamn-firewall >/dev/null 2>&1 || true
+        echo "HTTPS proxy disabled" ;;
+      *) [ -f /etc/ofogheamn-dns/https-proxy.json ] && echo "HTTPS proxy: on" || echo "HTTPS proxy: off" ;;
+    esac ;;
   recursive)
     shift
     case "${1:-status}" in

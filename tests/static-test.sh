@@ -397,6 +397,12 @@ has scripts/apply-node-profile.sh 'heartbeat'
 chk "TUIC client carries a keepalive heartbeat" $?
 has README.md 'apply-node-profile'
 chk "README documents the node profile and ladder" $?
+has scripts/gen-singbox-config.py 'ofogh-https-proxy'
+chk "generator emits the TLS-wrapped HTTP proxy inbound" $?
+has scripts/ofogheamn-dns 'https-proxy'
+chk "CLI manages the HTTPS proxy" $?
+has scripts/apply-node-profile.sh 'ofogh-https-client.json'
+chk "profile emits the HTTPS proxy client" $?
 has config/smartdns.conf 'domain-set:cod/ -speed-check-mode tcp:443 -response-mode fastest-response'
 chk "cod set answers fastest-response for session setup" $?
 rm -rf "$SD_DIR"

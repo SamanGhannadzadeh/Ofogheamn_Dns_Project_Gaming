@@ -1,3 +1,15 @@
+## v1.24 — 2026-11-21 (the best HTTP: CONNECT over TLS)
+
+- **HTTPS proxy inbound**: `ofogheamn-dns https-proxy enable`
+  (tcp/9443) — an HTTP proxy whose client-to-node leg is
+  TLS-encrypted, for HTTP-only devices (browsers, the
+  console's web/store path). Plain HTTP proxying leaves that
+  leg readable; this one looks like ordinary HTTPS. TCP-only
+  by design: it is not part of the game ladder and carries
+  no game UDP. The node profile enables it and emits
+  /root/ofogh-https-client.json; the firewall spec loop
+  covers its port.
+
 ## v1.23 — 2026-11-21 (the ladder is complete + documented)
 
 - **AnyTLS joins as the fifth rung**: the profile enables it
