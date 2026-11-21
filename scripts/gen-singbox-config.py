@@ -38,6 +38,8 @@ def main() -> int:
             "listen": "::",
             "listen_port": PORT,
             "users": [{"username": u["user"], "password": u["pass"]} for u in users],
+            "tcp_fast_open": True,
+            "udp_timeout": "10m",
             "udp_fragment": True,
         }
     ]
@@ -53,6 +55,8 @@ def main() -> int:
             "tag": "ofogh-console",
             "listen": "::",
             "listen_port": console_port,
+            "tcp_fast_open": True,
+            "udp_timeout": "10m",
             "udp_fragment": True,
         })
     # Optional VLESS+REALITY inbound (transport fallback ladder, top
@@ -127,6 +131,13 @@ def main() -> int:
             # fallback when no obfs type is named.
             hy2["obfs"] = {"type": h.get("obfs", "salamander"),
                            "password": h["obfs_password"]}
+        if h.get("masquerade_url"):
+            # Active-probe resistance: probing the UDP port is
+            # answered by a real website's QUIC stack. Flat form —
+            # sing-box rejects a nested "proxy" object here.
+            hy2["masquerade"] = {"type": "proxy",
+                                 "url": h["masquerade_url"],
+                                 "rewrite_host": True}
         inbounds.append(hy2)
     # Optional TUIC v5 inbound (the other QUIC rung: gentler
     # congestion control than Hysteria2's Brutal — BBR here —
@@ -197,7 +208,8 @@ def main() -> int:
             "timestamp": True,
         },
         "inbounds": inbounds,
-        "outbounds": [{"type": "direct", "tag": "direct"}],
+        "outbounds": [{"type": "direct", "tag": "direct",
+                       "tcp_fast_open": True}],
         "route": {"final": "direct"},
     }
     out = os.path.join(ETC, "singbox.json")

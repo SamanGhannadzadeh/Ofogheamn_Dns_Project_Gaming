@@ -1,3 +1,18 @@
+## v1.16 — 2026-11-21 (consultation round: durability + ECS depth)
+
+- **The generator now emits the live-proven proxy tuning itself**:
+  `tcp_fast_open` + `udp_timeout 10m` on both mixed inbounds and
+  `tcp_fast_open` on the direct outbound. These were hand-edits on the
+  reference node that a config regeneration silently dropped.
+- **Hysteria2 masquerade is a feature field**: set `masquerade_url` in
+  `hysteria2.json` and the generator emits the flat masquerade block
+  sing-box accepts (active-probe resistance for the QUIC port).
+- **ECS covers every query type on the edge blueprint**:
+  `-subnet-all-query-types` joins the edge upstreams, so HTTPS/SVCB
+  lookups carry the player's subnet too, not just A/AAAA.
+- **Cache checkpoints every 5 minutes** (`cache-checkpoint-time 300`):
+  a crash or reboot no longer loses up to a day of warm cache.
+
 ## v1.15 — 2026-11-21 (field fixes from three live nodes + DNS/proxy depth)
 
 - **Installer host prep is automatic now**: writes the systemd-resolved

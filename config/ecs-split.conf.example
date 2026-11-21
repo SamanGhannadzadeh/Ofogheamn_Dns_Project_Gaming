@@ -15,10 +15,10 @@
 # To experiment (on a real node, never blind):
 #   1. Create a second upstream group whose servers carry your
 #      SmartDNS build's client-subnet option, e.g.:
-#        server-tls 1.1.1.1 -group edge -exclude-default-group -subnet 203.0.113.0/24
-#        server-https https://cloudflare-dns.com/dns-query -group edge -exclude-default-group -subnet 203.0.113.0/24
-#        server-quic 1.1.1.1 -group edge -exclude-default-group -subnet 203.0.113.0/24
-#        server-h3 h3://1.1.1.1/dns-query -group edge -exclude-default-group -subnet 203.0.113.0/24
+#        server-tls 1.1.1.1 -group edge -exclude-default-group -subnet 203.0.113.0/24 -subnet-all-query-types
+#        server-https https://cloudflare-dns.com/dns-query -group edge -exclude-default-group -subnet 203.0.113.0/24 -subnet-all-query-types
+#        server-quic 1.1.1.1 -group edge -exclude-default-group -subnet 203.0.113.0/24 -subnet-all-query-types
+#        server-h3 h3://1.1.1.1/dns-query -group edge -exclude-default-group -subnet 203.0.113.0/24 -subnet-all-query-types
 #      and enable ECS forwarding per your build's documentation
 #      (`smartdns -h` / the release notes of YOUR version — the exact
 #      flag differs between releases; verify before deploying).
