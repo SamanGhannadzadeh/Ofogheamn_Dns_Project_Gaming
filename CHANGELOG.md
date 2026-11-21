@@ -1,3 +1,15 @@
+## v1.21 — 2026-11-21 (console gateway kit)
+
+- **The console path is now a first-class deliverable**: the
+  node profile also emits /root/ofogh-gateway.json — a sing-box
+  config for a small Linux box that sits in-path as the
+  console's gateway (the HYPEREV / LagoFast-Box pattern), with
+  LAN DNS hijacked to the node resolver and all console traffic
+  (TCP + UDP, every port, both stacks) riding the self-healing
+  auto group. `docs/CONSOLE-GATEWAY.fa.md` explains why the
+  console needs it (the PS5 has no SOCKS5 setting; its HTTP
+  proxy carries no game UDP) and how to wire it.
+
 ## v1.20 — 2026-11-21 (Pingium-class research round)
 
 - **UDP sessions can no longer be reaped mid-match**: the

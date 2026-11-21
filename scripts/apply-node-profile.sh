@@ -229,9 +229,31 @@ auto = {"type": "urltest", "tag": "auto",
         "interval": "30s", "tolerance": 150}
 json.dump(client([auto] + group, "auto"),
           open("/root/ofogh-client.json", "w"), indent=1)
+
+# Console gateway variant (research 2026-11-21, checklist item 1):
+# the PS5 has no SOCKS5 setting and its built-in HTTP proxy
+# carries no game UDP at all — the only way console game traffic
+# reaches the node is a gateway in-path running this config on a
+# small Linux box between the console and the router (the same
+# pattern as GearUP's HYPEREV and the LagoFast Box). LAN DNS is
+# hijacked to the node resolver; everything else rides the auto
+# group.
+gateway = client([auto] + group, "auto")
+gateway["inbounds"] = [{
+    "address": ["172.19.0.1/30", "fdfe:dcba:9876::1/126"],
+    "auto_redirect": True, "auto_route": True, "mtu": 1280,
+    "stack": "mixed", "strict_route": True, "tag": "tun-in",
+    "type": "tun"}]
+gateway["route"] = {
+    "auto_detect_interface": True, "final": "auto",
+    "rules": [{"action": "hijack-dns", "port": 53},
+              {"action": "route", "outbound": "auto",
+               "udp_timeout": "10m"}]}
+json.dump(gateway, open("/root/ofogh-gateway.json", "w"), indent=1)
 print("client configs: /root/ofogh-client.json (auto: "
       + ", ".join(o["tag"] for o in group)
-      + ") + single-transport files")
+      + ") + /root/ofogh-gateway.json (console gateway)"
+      + " + single-transport files")
 PY
 
 echo "== self-check"
@@ -243,5 +265,7 @@ iptables -t nat -S 2>/dev/null | grep -q '20000' \
   && echo "PASS port-hopping NAT present" || echo "WARN port-hopping NAT not seen"
 [ -f /root/ofogh-gecko-client.json ] \
   && echo "PASS client configs written" || echo "WARN client configs missing"
+[ -f /root/ofogh-gateway.json ] \
+  && echo "PASS console gateway config written" || echo "WARN gateway config missing"
 ofogheamn-dns bench 2>/dev/null || true
 echo "== node profile iran-baku applied"

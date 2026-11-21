@@ -379,6 +379,10 @@ has scripts/apply-node-profile.sh 'ofogh-client.json'
 chk "node profile emits the self-healing auto client" $?
 has scripts/apply-node-profile.sh 'urltest'
 chk "auto client uses an urltest fallback group" $?
+has scripts/apply-node-profile.sh 'ofogh-gateway.json'
+chk "node profile emits the console gateway config" $?
+has scripts/apply-node-profile.sh 'hijack-dns'
+chk "gateway config hijacks LAN DNS to the node resolver" $?
 has config/smartdns.conf 'domain-set:cod/ -speed-check-mode tcp:443 -response-mode fastest-response'
 chk "cod set answers fastest-response for session setup" $?
 rm -rf "$SD_DIR"
