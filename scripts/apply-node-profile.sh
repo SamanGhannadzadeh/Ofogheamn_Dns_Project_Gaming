@@ -25,12 +25,17 @@
 #      sessions, 16 MB socket buffers, TCP Fast Open both ways.
 #   4. QoS: datacenter-range refresh + DSCP EF marking for game
 #      traffic (ofogheamn-qos).
-#   5. PSN cache warmup every 4 minutes (CoD warmup ships with
-#      the installer).
+#   5. Cache warmup for the WHOLE gaming sets (gaming + CoD +
+#      PSN lists, A + AAAA) every 4 minutes, so every gaming
+#      lookup is a cache hit (the installer's cod-warmup also
+#      runs; serve-expired covers the gaps).
 #   6. Tunnels OFF (final product scope is DNS + proxy only) and
 #      the firewall in private mode: only the admin IP and the
 #      server's own IP may reach the service ports.
 #   7. The host resolver points at the node itself, last.
+#   8. Ready-to-import client configs are written to /root/
+#      (main Hysteria2 + Gecko variants, BBR — no fixed rates,
+#      narrow randomized port hopping on the main one).
 set -eu
 ETC=/etc/ofogheamn-dns
 ADMIN_IP="${OFOGH_ADMIN_IP:?set OFOGH_ADMIN_IP=<your public IP>}"
@@ -80,10 +85,9 @@ json.dump(cfg, open(p, "w"), indent=2)
 json.dump([], open("/etc/ofogheamn-dns/proxy-users.json", "w"))
 print("hysteria2: masquerade + bbr conservative set; proxy users emptied")
 PY
-ofogheamn-dns hysteria2-gecko enable 2083 >/dev/null 2>&1 || true
+[ -f "$ETC/hysteria2-gecko.json" ] || ofogheamn-dns hysteria2-gecko enable 2083 >/dev/null 2>&1 || true
 python3 /usr/local/lib/ofogheamn-dns/gen-singbox-config.py
-sing-box check -c /etc/ofogheamn-dns/singbox.json 2>/dev/null || \
-  sing-box check -c "$(ls /etc/ofogheamn-dns/*.json | head -1)" || true
+sing-box check -c /etc/ofogheamn-dns/singbox.json
 
 # --- 3. Kernel ------------------------------------------------------------
 cat > /etc/sysctl.d/99-ofogheamn-gaming.conf <<'EOF'
@@ -99,27 +103,30 @@ sysctl -p /etc/sysctl.d/99-ofogheamn-gaming.conf >/dev/null
 update-dc-ranges || echo "WARN: dc range refresh failed (QoS continues)"
 ofogheamn-qos || echo "WARN: ofogheamn-qos failed"
 
-# --- 5. PSN warmup ---------------------------------------------------------
-cat > /usr/local/bin/ofogh-psn-warm.sh <<'EOF'
+# --- 5. Full-set cache warmup ----------------------------------------------
+systemctl disable --now ofogh-psn-warm.timer >/dev/null 2>&1 || true
+rm -f /etc/systemd/system/ofogh-psn-warm.service /etc/systemd/system/ofogh-psn-warm.timer
+cat > /usr/local/bin/ofogh-warm-all.sh <<'EOF'
 #!/bin/bash
-for h in ps5.np.playstation.net us.np.stun.playstation.net \
-         native.np.playstation.net playstation.com playstation.net \
-         auth.api.sonyentertainmentnetwork.com; do
-  dig @127.0.0.1 "$h" >/dev/null 2>&1
-done
+# Warm the whole gaming sets (A + AAAA) so every gaming lookup is
+# a cache hit; serve-expired covers the gaps between runs.
+LISTS=/etc/ofogheamn-dns/lists
+{ cat "$LISTS/gaming.domains" "$LISTS/cod.domains" "$LISTS/psn.domains" 2>/dev/null; } \
+  | grep -vE '^[[:space:]]*(#|$)' | sort -u \
+  | xargs -P 8 -I{} sh -c 'dig @127.0.0.1 {} A >/dev/null 2>&1; dig @127.0.0.1 {} AAAA >/dev/null 2>&1'
 EOF
-chmod 755 /usr/local/bin/ofogh-psn-warm.sh
-cat > /etc/systemd/system/ofogh-psn-warm.service <<'EOF'
+chmod 755 /usr/local/bin/ofogh-warm-all.sh
+cat > /etc/systemd/system/ofogh-warm-all.service <<'EOF'
 [Unit]
-Description=Ofogheamn PSN cache warmup
+Description=Ofogheamn gaming-set cache warmup
 After=ofogheamn-dns.service
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/ofogh-psn-warm.sh
+ExecStart=/usr/local/bin/ofogh-warm-all.sh
 EOF
-cat > /etc/systemd/system/ofogh-psn-warm.timer <<'EOF'
+cat > /etc/systemd/system/ofogh-warm-all.timer <<'EOF'
 [Unit]
-Description=Run PSN warmup every 4 minutes
+Description=Run the gaming-set warmup every 4 minutes
 [Timer]
 OnBootSec=2min
 OnUnitActiveSec=4min
@@ -127,7 +134,7 @@ OnUnitActiveSec=4min
 WantedBy=timers.target
 EOF
 systemctl daemon-reload
-systemctl enable --now ofogh-psn-warm.timer >/dev/null 2>&1 || true
+systemctl enable --now ofogh-warm-all.timer >/dev/null 2>&1 || true
 
 # --- 6. Tunnels off + firewall private ------------------------------------
 systemctl disable --now wg-quick@wg0 strongswan xl2tpd ipsec \
@@ -141,6 +148,49 @@ systemctl restart ofogheamn-dns ofogheamn-proxy 2>/dev/null || true
 sleep 2
 printf 'nameserver 127.0.0.1\n' > /etc/resolv.conf
 
+# --- 8. Client configs ------------------------------------------------------
+SERVER_IP="$SERVER_IP" HOP_RANGE="$HOP_RANGE" python3 - <<'PY'
+import json, os
+etc = "/etc/ofogheamn-dns"
+ip = os.environ["SERVER_IP"]
+hop = os.environ["HOP_RANGE"].replace(":", "-")
+hy2 = json.load(open(f"{etc}/hysteria2.json"))
+tls = {"enabled": True, "insecure": True, "server_name": "ofogheamn"}
+
+def client(outbound):
+    return {
+        "dns": {"final": "remote",
+                "servers": [{"detour": "proxy", "server": ip,
+                             "tag": "remote", "type": "udp"}]},
+        "inbounds": [{"address": ["172.19.0.1/30", "fdfe:dcba:9876::1/126"],
+                      "auto_route": True, "mtu": 1280, "stack": "mixed",
+                      "strict_route": True, "tag": "tun-in", "type": "tun"}],
+        "log": {"level": "warn"},
+        "outbounds": [outbound, {"tag": "direct", "type": "direct"}],
+        "route": {"auto_detect_interface": True, "final": "proxy"},
+    }
+
+main = {"type": "hysteria2", "tag": "proxy", "server": ip,
+        "server_port": int(hy2.get("port", 443)),
+        "password": hy2["password"], "tls": tls,
+        "hop_ports": hop, "hop_interval": "15s", "hop_interval_max": "45s"}
+json.dump(client(main), open("/root/ofogh-hy2-client.json", "w"), indent=1)
+
+gecko_file = f"{etc}/hysteria2-gecko.json"
+if os.path.exists(gecko_file):
+    g = json.load(open(gecko_file))
+    gob = {"type": "hysteria2", "tag": "proxy", "server": ip,
+           "server_port": int(g.get("port", 2083)),
+           "password": g["password"], "tls": tls,
+           "obfs": {"type": "gecko", "password": g["obfs_password"],
+                    "min_packet_size": int(g.get("min_packet_size", 512)),
+                    "max_packet_size": int(g.get("max_packet_size", 1200))}}
+    json.dump(client(gob), open("/root/ofogh-gecko-client.json", "w"), indent=1)
+    print("client configs: /root/ofogh-hy2-client.json + /root/ofogh-gecko-client.json")
+else:
+    print("client config: /root/ofogh-hy2-client.json (gecko not enabled)")
+PY
+
 echo "== self-check"
 dig @127.0.0.1 demonware.net +time=3 +tries=1 2>/dev/null | grep -q 'status: NOERROR' \
   && echo "PASS dns answers (demonware.net)" || echo "WARN dns check failed"
@@ -148,4 +198,7 @@ ss -lun 2>/dev/null | grep -q ':2083 ' \
   && echo "PASS gecko listener udp/2083" || echo "WARN gecko listener not seen"
 iptables -t nat -S 2>/dev/null | grep -q '20000' \
   && echo "PASS port-hopping NAT present" || echo "WARN port-hopping NAT not seen"
+[ -f /root/ofogh-gecko-client.json ] \
+  && echo "PASS client configs written" || echo "WARN client configs missing"
+ofogheamn-dns bench 2>/dev/null || true
 echo "== node profile iran-baku applied"

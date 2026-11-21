@@ -1,3 +1,20 @@
+## v1.19 — 2026-11-21 (node profile, improved)
+
+- **Warmup now covers the whole gaming sets** — gaming + CoD +
+  PSN lists, A and AAAA, every 4 minutes (replaces the PSN-only
+  warmup; the old units are removed on upgrade), so every gaming
+  lookup is a cache hit instead of only the top hosts.
+- **The profile emits ready-to-import client configs**
+  (/root/ofogh-hy2-client.json and /root/ofogh-gecko-client.json):
+  BBR (no fixed up/down rates), narrow randomized port hopping on
+  the main inbound, dual-stack TUN. Running the profile now
+  delivers the node AND its clients.
+- **Hardening of the script itself**: the sing-box check is exact
+  and fatal (a broken generated config stops the run instead of
+  passing silently), re-runs no longer regenerate the Gecko
+  passwords (existing client configs keep working), and the
+  self-check ends with a bench run.
+
 ## v1.18 — 2026-11-21 (Iran→Baku gaming node profile)
 
 - **`scripts/apply-node-profile.sh`** — one idempotent run applies

@@ -363,5 +363,9 @@ fi
 # every domain passes and resolves by default.
 grep -q '^conf-file /etc/ofogheamn-dns/doh-resolvers.conf' config/smartdns.conf
 [ $? -ne 0 ]; chk "template does NOT sinkhole DoH resolvers (all domains pass)" $?
+has scripts/apply-node-profile.sh 'ofogh-warm-all'
+chk "node profile warms the full gaming sets" $?
+has scripts/apply-node-profile.sh 'ofogh-gecko-client.json'
+chk "node profile emits client configs" $?
 rm -rf "$SD_DIR"
 exit $fail
