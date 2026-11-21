@@ -1,3 +1,17 @@
+## v1.18 — 2026-11-21 (Iran→Baku gaming node profile)
+
+- **`scripts/apply-node-profile.sh`** — one idempotent run applies
+  the owner's production gaming profile for a Baku node serving
+  Iranian players (measured ~40-65 ms from Iranian lines, vs
+  ~110+ to Western Europe): the ECS edge group for the CoD/PSN
+  sets with the players' /24, gaming TTL floors, Hysteria2
+  masquerade + BBR conservative + port hopping, the parallel
+  Gecko listener, IP-authenticated (no-password) SOCKS5 product
+  scope, conntrack/buffer/Fast-Open kernel tuning, QoS refresh,
+  PSN warmup, tunnels off, private firewall. Every step was
+  verified live on the 2026-11-21 nodes; the script self-checks
+  DNS, the Gecko listener and the hopping NAT at the end.
+
 ## v1.17.2 — 2026-11-21 (all domains pass)
 
 - **Nothing is blocked by default**: the shipped SmartDNS template

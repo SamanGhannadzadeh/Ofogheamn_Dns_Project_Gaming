@@ -20,6 +20,7 @@ for f in install.sh uninstall.sh scripts/ofogheamn-dns \
          scripts/update-blocklist.sh gateway/redirect-53.sh \
          gateway/block-doh-ips.sh platforms/macos/install.sh \
          platforms/macos/uninstall.sh platforms/saman-os/install-saman-os.sh \
+         scripts/apply-node-profile.sh \
          docker/entrypoint.sh tests/smoke-test.sh; do
   bash -n "$f" 2>/dev/null; chk "bash -n $f" $?
 done
