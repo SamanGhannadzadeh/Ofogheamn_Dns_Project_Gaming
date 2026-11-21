@@ -120,7 +120,7 @@ fi
 # TUIC v5 (UDP) and AnyTLS (TCP): opt-in, password-authenticated,
 # same treatment as Hysteria2 — allowlist in private mode, open
 # in public mode.
-for spec in "tuic.json udp TUIC" "anytls.json tcp AnyTLS"; do
+for spec in "tuic.json udp TUIC" "anytls.json tcp AnyTLS" "hysteria2-gecko.json udp Hysteria2-Gecko" "reality.json tcp REALITY"; do
   set -- $spec
   if [ -r "$ETC/$1" ]; then
     P="$(python3 -c "import json;print(json.load(open('$ETC/$1'))['port'])" 2>/dev/null || true)"

@@ -367,5 +367,19 @@ has scripts/apply-node-profile.sh 'ofogh-warm-all'
 chk "node profile warms the full gaming sets" $?
 has scripts/apply-node-profile.sh 'ofogh-gecko-client.json'
 chk "node profile emits client configs" $?
+has scripts/gen-singbox-config.py '"udp_timeout": "10m"'
+chk "server config overrides sniffed UDP session timeouts" $?
+has scripts/gen-singbox-config.py 'ofogheamn:operator'
+chk "REALITY emits an operator client with an empty user store" $?
+has scripts/ofogheamn-firewall.sh 'hysteria2-gecko.json'
+chk "firewall guards the Gecko port like other transports" $?
+has scripts/ofogheamn-firewall.sh 'reality.json tcp REALITY'
+chk "firewall guards the REALITY port like other transports" $?
+has scripts/apply-node-profile.sh 'ofogh-client.json'
+chk "node profile emits the self-healing auto client" $?
+has scripts/apply-node-profile.sh 'urltest'
+chk "auto client uses an urltest fallback group" $?
+has config/smartdns.conf 'domain-set:cod/ -speed-check-mode tcp:443 -response-mode fastest-response'
+chk "cod set answers fastest-response for session setup" $?
 rm -rf "$SD_DIR"
 exit $fail

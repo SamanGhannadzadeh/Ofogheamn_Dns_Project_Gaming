@@ -33,9 +33,15 @@
 #      the firewall in private mode: only the admin IP and the
 #      server's own IP may reach the service ports.
 #   7. The host resolver points at the node itself, last.
-#   8. Ready-to-import client configs are written to /root/
-#      (main Hysteria2 + Gecko variants, BBR — no fixed rates,
-#      narrow randomized port hopping on the main one).
+#   8. Ready-to-import client configs are written to /root/ —
+#      single-transport files plus the combined /root/
+#      ofogh-client.json whose urltest group (Gecko, Hysteria2,
+#      REALITY) heals the route by itself when UDP is throttled
+#      or blocked. REALITY is enabled as the TCP/443 fallback
+#      rung. All clients: BBR (no fixed rates), narrow randomized
+#      port hopping on Hysteria2, dual-stack TUN, and a 10-minute
+#      UDP session lifetime so game sessions are never reaped
+#      at the 10 s/30 s sniffed-protocol defaults.
 set -eu
 ETC=/etc/ofogheamn-dns
 ADMIN_IP="${OFOGH_ADMIN_IP:?set OFOGH_ADMIN_IP=<your public IP>}"
@@ -51,7 +57,7 @@ sed -i 's#^nameserver /domain-set:cod/gaming#nameserver /domain-set:cod/edge#' "
 grep -q 'domain-set -name psn' "$CONF" || \
   echo "domain-set -name psn -file $ETC/lists/psn.domains" >> "$CONF"
 grep -q 'domain-rules /domain-set:psn/' "$CONF" || \
-  echo "domain-rules /domain-set:psn/ -speed-check-mode ping,tcp:443 -response-mode fastest-ip -rr-ttl-min 120" >> "$CONF"
+  echo "domain-rules /domain-set:psn/ -speed-check-mode tcp:443 -response-mode fastest-response -rr-ttl-min 120" >> "$CONF"
 grep -q 'nameserver /domain-set:psn/edge' "$CONF" || \
   echo "nameserver /domain-set:psn/edge" >> "$CONF"
 grep 'domain-rules /domain-set:gaming/' "$CONF" | grep -q 'rr-ttl-min' || \
@@ -86,13 +92,14 @@ json.dump([], open("/etc/ofogheamn-dns/proxy-users.json", "w"))
 print("hysteria2: masquerade + bbr conservative set; proxy users emptied")
 PY
 [ -f "$ETC/hysteria2-gecko.json" ] || ofogheamn-dns hysteria2-gecko enable 2083 >/dev/null 2>&1 || true
+[ -f "$ETC/reality.json" ] || ofogheamn-dns reality enable >/dev/null 2>&1 || true
 python3 /usr/local/lib/ofogheamn-dns/gen-singbox-config.py
 sing-box check -c /etc/ofogheamn-dns/singbox.json
 
 # --- 3. Kernel ------------------------------------------------------------
 cat > /etc/sysctl.d/99-ofogheamn-gaming.conf <<'EOF'
 net.netfilter.nf_conntrack_udp_timeout = 120
-net.netfilter.nf_conntrack_udp_timeout_stream = 180
+net.netfilter.nf_conntrack_udp_timeout_stream = 300
 net.core.rmem_max = 16777216
 net.core.wmem_max = 16777216
 net.ipv4.tcp_fastopen = 3
@@ -157,24 +164,31 @@ hop = os.environ["HOP_RANGE"].replace(":", "-")
 hy2 = json.load(open(f"{etc}/hysteria2.json"))
 tls = {"enabled": True, "insecure": True, "server_name": "ofogheamn"}
 
-def client(outbound):
+def client(outbounds, final):
+    # The route rule carries udp_timeout: without it, sniffed UDP
+    # sessions are reaped at the 10 s/30 s protocol defaults and
+    # long game sessions die mid-match (research 2026-11-21).
     return {
         "dns": {"final": "remote",
-                "servers": [{"detour": "proxy", "server": ip,
+                "servers": [{"detour": final, "server": ip,
                              "tag": "remote", "type": "udp"}]},
         "inbounds": [{"address": ["172.19.0.1/30", "fdfe:dcba:9876::1/126"],
                       "auto_route": True, "mtu": 1280, "stack": "mixed",
                       "strict_route": True, "tag": "tun-in", "type": "tun"}],
         "log": {"level": "warn"},
-        "outbounds": [outbound, {"tag": "direct", "type": "direct"}],
-        "route": {"auto_detect_interface": True, "final": "proxy"},
+        "outbounds": outbounds + [{"tag": "direct", "type": "direct"}],
+        "route": {"auto_detect_interface": True, "final": final,
+                  "rules": [{"action": "route", "outbound": final,
+                             "udp_timeout": "10m"}]},
     }
 
 main = {"type": "hysteria2", "tag": "proxy", "server": ip,
         "server_port": int(hy2.get("port", 443)),
         "password": hy2["password"], "tls": tls,
         "hop_ports": hop, "hop_interval": "15s", "hop_interval_max": "45s"}
-json.dump(client(main), open("/root/ofogh-hy2-client.json", "w"), indent=1)
+json.dump(client([main], "proxy"),
+          open("/root/ofogh-hy2-client.json", "w"), indent=1)
+group = [dict(main, tag="proxy-hy2")]
 
 gecko_file = f"{etc}/hysteria2-gecko.json"
 if os.path.exists(gecko_file):
@@ -185,10 +199,39 @@ if os.path.exists(gecko_file):
            "obfs": {"type": "gecko", "password": g["obfs_password"],
                     "min_packet_size": int(g.get("min_packet_size", 512)),
                     "max_packet_size": int(g.get("max_packet_size", 1200))}}
-    json.dump(client(gob), open("/root/ofogh-gecko-client.json", "w"), indent=1)
-    print("client configs: /root/ofogh-hy2-client.json + /root/ofogh-gecko-client.json")
-else:
-    print("client config: /root/ofogh-hy2-client.json (gecko not enabled)")
+    json.dump(client([gob], "proxy"),
+              open("/root/ofogh-gecko-client.json", "w"), indent=1)
+    group.insert(0, dict(gob, tag="proxy-gecko"))
+
+rc_file = f"{etc}/reality-clients.json"
+if os.path.exists(rc_file):
+    rc = json.load(open(rc_file))
+    if rc.get("clients"):
+        rob = {"type": "vless", "tag": "proxy-reality", "server": ip,
+               "server_port": int(rc.get("port", 4443)),
+               "uuid": rc["clients"][0]["uuid"],
+               "flow": "xtls-rprx-vision",
+               "tls": {"enabled": True,
+                       "server_name": rc.get("server_name",
+                                             "www.microsoft.com"),
+                       "utls": {"enabled": True, "fingerprint": "chrome"},
+                       "reality": {"enabled": True,
+                                   "public_key": rc.get("public_key", ""),
+                                   "short_id": rc.get("short_id", "")}}}
+        group.append(rob)
+
+# The combined client: an urltest group heals the route by itself
+# — UDP transports first, the TCP/443 REALITY rung as the fallback
+# for the hours when Iran throttles or blocks UDP outright.
+auto = {"type": "urltest", "tag": "auto",
+        "outbounds": [o["tag"] for o in group],
+        "url": "https://www.gstatic.com/generate_204",
+        "interval": "30s", "tolerance": 150}
+json.dump(client([auto] + group, "auto"),
+          open("/root/ofogh-client.json", "w"), indent=1)
+print("client configs: /root/ofogh-client.json (auto: "
+      + ", ".join(o["tag"] for o in group)
+      + ") + single-transport files")
 PY
 
 echo "== self-check"

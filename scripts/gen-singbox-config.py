@@ -77,6 +77,14 @@ def main() -> int:
             uid = str(uuidlib.uuid5(uuidlib.NAMESPACE_URL, "ofogheamn:" + u["user"]))
             vless_users.append({"uuid": uid, "flow": "xtls-rprx-vision"})
             clients.append({"user": u["user"], "uuid": uid})
+        if not clients:
+            # No-auth SOCKS product scope (empty user store): the
+            # REALITY rung still needs one client or it accepts
+            # nobody — emit a single operator client.
+            uid = str(uuidlib.uuid5(uuidlib.NAMESPACE_URL,
+                                    "ofogheamn:operator"))
+            vless_users.append({"uuid": uid, "flow": "xtls-rprx-vision"})
+            clients.append({"user": "operator", "uuid": uid})
         with open(os.path.join(ETC, "reality-clients.json"), "w", encoding="utf-8") as fh:
             json.dump({"server_name": r.get("server_name", "www.microsoft.com"),
                        "port": int(r.get("port", 443)),
@@ -243,7 +251,15 @@ def main() -> int:
         "inbounds": inbounds,
         "outbounds": [{"type": "direct", "tag": "direct",
                        "tcp_fast_open": True}],
-        "route": {"final": "direct"},
+        "route": {"final": "direct",
+                  # One catch-all rule whose only job is the UDP
+                  # session lifetime: without it, sing-box reaps
+                  # sniffed UDP sessions at the protocol defaults
+                  # (10 s for dns/ntp/stun, 30 s for quic/dtls) —
+                  # the classic "disconnects mid-match, ping was
+                  # fine" failure (research 2026-11-21).
+                  "rules": [{"action": "route", "outbound": "direct",
+                             "udp_timeout": "10m"}]},
     }
     out = os.path.join(ETC, "singbox.json")
     with open(out, "w", encoding="utf-8") as fh:

@@ -1,3 +1,36 @@
+## v1.20 — 2026-11-21 (Pingium-class research round)
+
+- **UDP sessions can no longer be reaped mid-match**: the
+  generated server config carries a catch-all route rule with
+  `udp_timeout 10m`, and the profile's client configs carry the
+  same override — without it, sing-box reaps sniffed UDP sessions
+  at the protocol defaults (10 s for stun/dns, 30 s for
+  quic/dtls). The profile's conntrack UDP-stream timeout rises
+  to 300 s to match.
+- **REALITY works in the no-auth product scope**: with an empty
+  user store the generator now still emits one operator VLESS
+  client (previously the REALITY inbound accepted nobody), and
+  the node profile enables REALITY as the TCP/443 fallback rung.
+- **Self-healing client**: the profile's combined
+  /root/ofogh-client.json routes through an urltest group —
+  Gecko, then Hysteria2, then REALITY — so when Iran throttles
+  or blocks UDP, the client falls back to TCP/443 by itself.
+- **Session-setup latency**: the CoD and PSN sets now answer
+  fastest-response with tcp:443 speed checks (fastest-IP remains
+  for the download-oriented gaming set); the dual-stack
+  selection threshold rises to 50 ms.
+- **Firewall parity**: the Gecko (udp/2083) and REALITY
+  (tcp/4443) ports get the same allowlist treatment as the other
+  authenticated transports in private mode.
+- Deliberately unchanged, against generic advice: global
+  prefetch stays OFF (the full-set warmer refreshes the
+  fastest-IP measurements too; plain prefetch does not), ECS
+  stays ON for the gaming sets (the resolver also serves
+  direct-exit console customers, and Baku is close enough to
+  Iran that the edge penalty is small), and DSCP marking is
+  documented as a local-queue tool only — it is measured to be
+  ignored across the public internet.
+
 ## v1.19 — 2026-11-21 (node profile, improved)
 
 - **Warmup now covers the whole gaming sets** — gaming + CoD +
