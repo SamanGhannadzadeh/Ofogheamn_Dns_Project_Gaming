@@ -15,13 +15,25 @@
 # To experiment (on a real node, never blind):
 #   1. Create a second upstream group whose servers carry your
 #      SmartDNS build's client-subnet option, e.g.:
-#        server-tls 1.1.1.1 -group edge -exclude-default-group
-#        server-https https://cloudflare-dns.com/dns-query -group edge -exclude-default-group
+#        server-tls 1.1.1.1 -group edge -exclude-default-group -subnet 203.0.113.0/24
+#        server-https https://cloudflare-dns.com/dns-query -group edge -exclude-default-group -subnet 203.0.113.0/24
+#        server-quic 1.1.1.1 -group edge -exclude-default-group -subnet 203.0.113.0/24
+#        server-h3 h3://1.1.1.1/dns-query -group edge -exclude-default-group -subnet 203.0.113.0/24
 #      and enable ECS forwarding per your build's documentation
 #      (`smartdns -h` / the release notes of YOUR version — the exact
 #      flag differs between releases; verify before deploying).
+#      (This exact form — DoT+QUIC+H3 edge group with the player's /24 —
+#      is what the reference nodes run in production since v1.15.)
 #   2. Route ONLY matchmaking/CDN domain-sets to it:
 #        nameserver /domain-set:cod/edge
+#        domain-set -name psn -file /etc/ofogheamn-dns/lists/psn.domains
+#        nameserver /domain-set:psn/edge
+#        domain-rules /domain-set:psn/ -speed-check-mode ping,tcp:443 -response-mode fastest-ip
+#      and REMOVE those domains from any other set that also routes
+#      them (a domain in two routed sets follows the first set that
+#      claims it — the PlayStation domains ship in lists/psn.domains
+#      for exactly this reason; do not duplicate them into
+#      gaming.domains).
 #      (keep the gaming set and everything else on the default
 #      node-located path).
 #   3. Measure with `ofogheamn-dns region` + in-game ping before and

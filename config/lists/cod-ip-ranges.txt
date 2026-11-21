@@ -1,0 +1,15 @@
+# Call of Duty / Activision / Blizzard observed ranges.
+# Activision/Demonware publish NO official list; these are
+# community-observed ranges (checked 2026-11-21). Used by
+# ofogheamn-qos for DSCP priority marking only.
+185.34.107.0/24
+173.199.105.0/24
+173.45.168.0/24
+5.42.160.0/20
+5.42.176.0/20
+185.60.112.0/23
+185.60.114.0/23
+137.221.64.0/19
+137.221.96.0/19
+37.244.0.0/19
+37.244.32.0/19

@@ -1,3 +1,30 @@
+## v1.15 — 2026-11-21 (field fixes from three live nodes + DNS/proxy depth)
+
+- **Installer host prep is automatic now**: writes the systemd-resolved
+  no-stub drop-in, disables the distro `unbound.service` (it binds :53
+  and crash-loops against the project recursive unit), installs the
+  AppArmor local grant for Unbound (`config/apparmor/`), and adds
+  `ipset` + `unbound` to the base packages. All four were manual fixes
+  on live nodes before.
+- **REALITY no longer collides with DoH**: `ofogheamn-dns reality
+  enable` writes port **4443** (443 belongs to SmartDNS DoH/Hysteria2).
+- **System resolver points at the node**: install guards
+  /etc/resolv.conf to 127.0.0.1, so the proxy resolves SOCKS domain
+  targets through the gaming DNS instead of the provider resolver —
+  before this, every domain a client sent to the SOCKS5 port bypassed
+  all gaming rules.
+- **Gaming upstreams speak QUIC/H3 too**: `server-quic` + `server-h3`
+  join the gaming group next to DoT — no TCP head-of-line blocking on
+  the resolution path.
+- **ECS edge blueprint updated to the shipped form**: the edge group
+  (DoT+QUIC+H3 carrying the player's /24) now also routes the new
+  PlayStation set (`lists/psn.domains`); the blueprint documents the
+  exact production layout and the two-sets-one-domain trap.
+- **Gaming QoS ships as a script**: `scripts/ofogheamn-qos.sh` marks
+  game UDP with DSCP EF by port, by `lists/cod-ip-ranges.txt` and by
+  aggregated datacenter ranges; `scripts/update-dc-ranges.py` rebuilds
+  the datacenter list from the official AWS/GCP/Azure feeds.
+
 ## v1.14 — 2026-11-21 (micro pass: warm path measured, bypass closed)
 
 - **Warm path, measured.** With the shipped config running

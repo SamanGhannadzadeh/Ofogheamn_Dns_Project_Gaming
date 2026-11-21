@@ -1,0 +1,3 @@
+# Local AppArmor grant for the distro Unbound profile: the project
+# recursive unit runs Unbound with /etc/ofogheamn-dns/unbound.conf.
+/etc/ofogheamn-dns/** r,

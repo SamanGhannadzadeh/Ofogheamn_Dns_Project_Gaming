@@ -38,7 +38,7 @@ esac
 say "installing base tools"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
-apt-get install -y -qq curl ca-certificates openssl dnsutils iproute2 >/dev/null
+apt-get install -y -qq curl ca-certificates openssl dnsutils iproute2 ipset unbound >/dev/null
 
 # Public IP, detected once here: the WireGuard server config
 # (below) already needs it as the client endpoint. It used to be
@@ -112,10 +112,19 @@ cp "$SRC_DIR/config/doh-resolvers.conf" "$ETC/doh-resolvers.conf"
 cp "$SRC_DIR/config/unbound.conf" "$ETC/unbound.conf"
 cp "$SRC_DIR/config/lists/gaming.domains" "$ETC/lists/gaming.domains"
 cp "$SRC_DIR/config/lists/cod.domains" "$ETC/lists/cod.domains"
+cp "$SRC_DIR/config/lists/psn.domains" "$ETC/lists/psn.domains"
+cp "$SRC_DIR/config/lists/cod-ip-ranges.txt" "$ETC/lists/cod-ip-ranges.txt"
+# AppArmor: the project Unbound reads its config from $ETC; the distro
+# profile does not know that path and the recursive unit crash-loops.
+if [ -d /etc/apparmor.d/local ]; then
+  cp "$SRC_DIR/config/apparmor/usr.sbin.unbound.local" /etc/apparmor.d/local/usr.sbin.unbound
+fi
 sed -i "s/^bind-cert-san .*/bind-cert-san $HOSTNAME_DNS/" "$ETC/smartdns.conf"
 install -m 755 "$SRC_DIR/scripts/ofogheamn-dns" /usr/local/bin/ofogheamn-dns
 install -m 755 "$SRC_DIR/scripts/cod-warmup.sh" /usr/local/bin/cod-warmup
 install -m 755 "$SRC_DIR/scripts/ofogheamn-firewall.sh" /usr/local/bin/ofogheamn-firewall
+install -m 755 "$SRC_DIR/scripts/ofogheamn-qos.sh" /usr/local/bin/ofogheamn-qos
+install -m 755 "$SRC_DIR/scripts/update-dc-ranges.py" /usr/local/bin/update-dc-ranges
 install -m 755 "$SRC_DIR/scripts/update-blocklist.sh" /usr/local/bin/update-blocklist
 mkdir -p /usr/local/lib/ofogheamn-dns
 [ "$LITE" != "1" ] && install -m 644 "$SRC_DIR/panel/panel.py" /usr/local/lib/ofogheamn-dns/panel.py || true
@@ -239,6 +248,22 @@ cp "$SRC_DIR/systemd/ofogheamn-health.timer" /etc/systemd/system/ofogheamn-healt
 # Mesh is OPT-IN: installed but never enabled by the installer.
 # The owner turns it on with: ofogheamn-dns mesh on
 touch /etc/ofogheamn-dns/mesh-upstream.conf
+# ---------- host prep (v1.15: the three manual node fixes, automated) ----------
+# 1) systemd-resolved's stub listener owns :53 and SmartDNS cannot bind.
+if [ -d /etc/systemd/resolved.conf.d ]; then
+  printf '[Resolve]\nDNSStubListener=no\n' > /etc/systemd/resolved.conf.d/no-stub.conf
+  systemctl restart systemd-resolved 2>/dev/null || true
+fi
+# 2) The distro unbound.service also binds :53; the project runs its own
+#    recursive unit (ofogheamn-recursive), so the distro one only fights it.
+systemctl disable --now unbound 2>/dev/null || true
+# 3) The host resolver (and with it the proxy, which has no DNS section of
+#    its own) must resolve through the node DNS, not the provider's —
+#    otherwise SOCKS domain targets bypass every gaming rule above.
+if ! grep -q '^nameserver 127.0.0.1' /etc/resolv.conf 2>/dev/null; then
+  rm -f /etc/resolv.conf
+  printf 'nameserver 127.0.0.1\noptions timeout:2 attempts:2\n' > /etc/resolv.conf
+fi
 systemctl daemon-reload
 systemctl enable ofogheamn-dns >/dev/null 2>&1 || true
 systemctl enable --now cod-warmup.timer >/dev/null 2>&1 || true

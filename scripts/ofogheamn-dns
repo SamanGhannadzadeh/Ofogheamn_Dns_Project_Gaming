@@ -269,11 +269,11 @@ PY
 import json, sys, os
 cfg = {"private_key": sys.argv[1], "public_key": sys.argv[2],
        "short_id": sys.argv[3], "server_name": "www.microsoft.com",
-       "port": 443}
+       "port": 4443}
 p = "/etc/ofogheamn-dns/reality.json"
 with open(p, "w") as fh: json.dump(cfg, fh, indent=2)
 os.chmod(p, 0o600)
-print("REALITY enabled on :443 — client needs: public_key=" + sys.argv[2]
+print("REALITY enabled on :4443 — client needs: public_key=" + sys.argv[2]
       + " short_id=" + sys.argv[3] + " sni=www.microsoft.com")
 PY
         gen_proxy
