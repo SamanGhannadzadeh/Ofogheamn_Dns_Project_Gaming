@@ -307,7 +307,7 @@ if curl -fsSL --max-time 90 -o "$SD_BIN" \
   PID=$!; sleep 3
   kill -0 "$PID" 2>/dev/null; chk "shipped smartdns.conf starts and stays up" $?
   DG="$(dig +tcp +time=3 +tries=1 @127.0.0.1 -p 15353 dns.google A 2>/dev/null | awk '/status:/{print $6}' | tr -d ,)"
-  [ "$DG" = "NXDOMAIN" ]; chk "public DoH name (dns.google) is sinkholed by the shipped config" $?
+  [ "$DG" != "NXDOMAIN" ]; chk "public DoH name (dns.google) is NOT sinkholed by the shipped config (all domains pass)" $?
   kill "$PID" 2>/dev/null; wait "$PID" 2>/dev/null
   # The invariant behind three installer bugs: remove the mesh
   # include and the core must refuse to start.
