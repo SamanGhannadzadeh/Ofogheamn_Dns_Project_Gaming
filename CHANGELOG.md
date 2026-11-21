@@ -1,3 +1,19 @@
+## v1.23 — 2026-11-21 (the ladder is complete + documented)
+
+- **AnyTLS joins as the fifth rung**: the profile enables it
+  (guarded), emits /root/ofogh-anytls-client.json and adds it
+  to the self-healing group — Gecko → Hysteria2 → TUIC →
+  REALITY → AnyTLS. Two independent TCP fallbacks for the
+  hours when UDP is throttled or blocked.
+- **Client hop range narrowed**: emitted Hysteria2 clients now
+  hop inside a 400-port sub-range with the randomized 15–45 s
+  interval (the server NAT stays wide) — the profile now
+  matches the DPI research instead of hopping the full range.
+- **TUIC keepalive**: the emitted TUIC client carries a 15 s
+  heartbeat so idle QUIC sessions survive NAT rebinding.
+- **README** documents the gaming proxy ladder and the node
+  profile.
+
 ## v1.22 — 2026-11-21 (TUIC joins the ladder)
 
 - **The better-than-SOCKS5 legs are now the whole ladder**:

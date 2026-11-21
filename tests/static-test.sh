@@ -389,6 +389,14 @@ has scripts/apply-node-profile.sh 'proxy-tuic'
 chk "auto client group includes TUIC" $?
 has scripts/apply-node-profile.sh 'udp_relay_mode'
 chk "TUIC client uses native UDP relay" $?
+has scripts/apply-node-profile.sh 'ofogheamn-dns anytls enable'
+chk "node profile enables AnyTLS as the fifth rung" $?
+has scripts/apply-node-profile.sh 'proxy-anytls'
+chk "auto client group includes AnyTLS" $?
+has scripts/apply-node-profile.sh 'heartbeat'
+chk "TUIC client carries a keepalive heartbeat" $?
+has README.md 'apply-node-profile'
+chk "README documents the node profile and ladder" $?
 has config/smartdns.conf 'domain-set:cod/ -speed-check-mode tcp:443 -response-mode fastest-response'
 chk "cod set answers fastest-response for session setup" $?
 rm -rf "$SD_DIR"

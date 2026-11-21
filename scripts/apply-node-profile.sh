@@ -36,10 +36,10 @@
 #   8. Ready-to-import client configs are written to /root/ —
 #      single-transport files plus the combined /root/
 #      ofogh-client.json whose urltest group (Gecko, Hysteria2,
-#      TUIC, REALITY) heals the route by itself when UDP is
-#      throttled or blocked. REALITY is the TCP/443 fallback
-#      rung; TUIC is the second QUIC rung — both QUIC transports
-#      are the better-than-SOCKS5 WAN legs for game traffic,
+#      TUIC, REALITY, AnyTLS) heals the route by itself when UDP
+#      is throttled or blocked. REALITY and AnyTLS are the TCP
+#      fallback rungs; the QUIC transports are the
+#      better-than-SOCKS5 WAN legs for game traffic,
 #      while SOCKS5 stays as the LAN-side entry point only. All clients: BBR (no fixed rates), narrow randomized
 #      port hopping on Hysteria2, dual-stack TUN, and a 10-minute
 #      UDP session lifetime so game sessions are never reaped
@@ -96,6 +96,7 @@ PY
 [ -f "$ETC/hysteria2-gecko.json" ] || ofogheamn-dns hysteria2-gecko enable 2083 >/dev/null 2>&1 || true
 [ -f "$ETC/reality.json" ] || ofogheamn-dns reality enable >/dev/null 2>&1 || true
 [ -f "$ETC/tuic.json" ] || ofogheamn-dns tuic enable >/dev/null 2>&1 || true
+[ -f "$ETC/anytls.json" ] || ofogheamn-dns anytls enable >/dev/null 2>&1 || true
 python3 /usr/local/lib/ofogheamn-dns/gen-singbox-config.py
 sing-box check -c /etc/ofogheamn-dns/singbox.json
 
@@ -164,6 +165,8 @@ import json, os
 etc = "/etc/ofogheamn-dns"
 ip = os.environ["SERVER_IP"]
 hop = os.environ["HOP_RANGE"].replace(":", "-")
+hop_start = int(hop.split("-")[0])
+client_hop = f"{hop_start}-{hop_start + 400}"
 hy2 = json.load(open(f"{etc}/hysteria2.json"))
 tls = {"enabled": True, "insecure": True, "server_name": "ofogheamn"}
 
@@ -188,7 +191,7 @@ def client(outbounds, final):
 main = {"type": "hysteria2", "tag": "proxy", "server": ip,
         "server_port": int(hy2.get("port", 443)),
         "password": hy2["password"], "tls": tls,
-        "hop_ports": hop, "hop_interval": "15s", "hop_interval_max": "45s"}
+        "hop_ports": client_hop, "hop_interval": "15s", "hop_interval_max": "45s"}
 json.dump(client([main], "proxy"),
           open("/root/ofogh-hy2-client.json", "w"), indent=1)
 group = [dict(main, tag="proxy-hy2")]
@@ -213,7 +216,7 @@ if os.path.exists(tuic_file):
            "server_port": int(t.get("port", 8443)),
            "uuid": t["uuid"], "password": t["password"],
            "congestion_control": "bbr", "udp_relay_mode": "native",
-           "zero_rtt_handshake": False,
+           "zero_rtt_handshake": False, "heartbeat": "15s",
            "tls": {"enabled": True, "insecure": True,
                    "server_name": "ofogheamn", "alpn": ["h3"]}}
     json.dump(client([tob], "proxy"),
@@ -236,6 +239,18 @@ if os.path.exists(rc_file):
                                    "public_key": rc.get("public_key", ""),
                                    "short_id": rc.get("short_id", "")}}}
         group.append(rob)
+
+at_file = f"{etc}/anytls.json"
+if os.path.exists(at_file):
+    a = json.load(open(at_file))
+    aob = {"type": "anytls", "tag": "proxy-anytls", "server": ip,
+           "server_port": int(a.get("port", 8443)),
+           "password": a["password"],
+           "tls": {"enabled": True, "insecure": True,
+                   "server_name": "ofogheamn", "alpn": ["h2", "http/1.1"]}}
+    json.dump(client([dict(aob, tag="proxy")], "proxy"),
+              open("/root/ofogh-anytls-client.json", "w"), indent=1)
+    group.append(aob)
 
 # The combined client: an urltest group heals the route by itself
 # — UDP transports first, the TCP/443 REALITY rung as the fallback
@@ -280,6 +295,8 @@ ss -lun 2>/dev/null | grep -q ':2083 ' \
   && echo "PASS gecko listener udp/2083" || echo "WARN gecko listener not seen"
 ss -lun 2>/dev/null | grep -q ':8443 ' \
   && echo "PASS tuic listener udp/8443" || echo "WARN tuic listener not seen"
+ss -tln 2>/dev/null | grep -q ':8443 ' \
+  && echo "PASS anytls listener tcp/8443" || echo "WARN anytls listener not seen"
 iptables -t nat -S 2>/dev/null | grep -q '20000' \
   && echo "PASS port-hopping NAT present" || echo "WARN port-hopping NAT not seen"
 [ -f /root/ofogh-gecko-client.json ] \
