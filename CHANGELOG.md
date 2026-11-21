@@ -1,3 +1,13 @@
+## v1.17.2 — 2026-11-21 (all domains pass)
+
+- **Nothing is blocked by default**: the shipped SmartDNS template
+  no longer loads the public-DoH-resolver sinkhole
+  (`doh-resolvers.conf` stays in the repo as a documented opt-in).
+  Combined with the empty-by-default blocklist (its refresh timer
+  is opt-in and never enabled by the installer), every domain a
+  client asks for is resolved and passed through. A static test
+  now guards this guarantee.
+
 ## v1.17.1 — 2026-11-21 (correction)
 
 - IPv6 through SOCKS is dual-stack **without preference**: the

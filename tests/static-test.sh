@@ -357,5 +357,10 @@ EOF
 else
   echo "SKIP  smartdns binary unavailable (offline?) — config tests skipped"
 fi
+# Standing guarantee (owner decision, 2026-11-21): the shipped
+# template must not ACTIVELY load the DoH-resolver sinkhole —
+# every domain passes and resolves by default.
+grep -q '^conf-file /etc/ofogheamn-dns/doh-resolvers.conf' config/smartdns.conf
+[ $? -ne 0 ]; chk "template does NOT sinkhole DoH resolvers (all domains pass)" $?
 rm -rf "$SD_DIR"
 exit $fail
