@@ -36,9 +36,11 @@
 #   8. Ready-to-import client configs are written to /root/ —
 #      single-transport files plus the combined /root/
 #      ofogh-client.json whose urltest group (Gecko, Hysteria2,
-#      REALITY) heals the route by itself when UDP is throttled
-#      or blocked. REALITY is enabled as the TCP/443 fallback
-#      rung. All clients: BBR (no fixed rates), narrow randomized
+#      TUIC, REALITY) heals the route by itself when UDP is
+#      throttled or blocked. REALITY is the TCP/443 fallback
+#      rung; TUIC is the second QUIC rung — both QUIC transports
+#      are the better-than-SOCKS5 WAN legs for game traffic,
+#      while SOCKS5 stays as the LAN-side entry point only. All clients: BBR (no fixed rates), narrow randomized
 #      port hopping on Hysteria2, dual-stack TUN, and a 10-minute
 #      UDP session lifetime so game sessions are never reaped
 #      at the 10 s/30 s sniffed-protocol defaults.
@@ -93,6 +95,7 @@ print("hysteria2: masquerade + bbr conservative set; proxy users emptied")
 PY
 [ -f "$ETC/hysteria2-gecko.json" ] || ofogheamn-dns hysteria2-gecko enable 2083 >/dev/null 2>&1 || true
 [ -f "$ETC/reality.json" ] || ofogheamn-dns reality enable >/dev/null 2>&1 || true
+[ -f "$ETC/tuic.json" ] || ofogheamn-dns tuic enable >/dev/null 2>&1 || true
 python3 /usr/local/lib/ofogheamn-dns/gen-singbox-config.py
 sing-box check -c /etc/ofogheamn-dns/singbox.json
 
@@ -203,6 +206,20 @@ if os.path.exists(gecko_file):
               open("/root/ofogh-gecko-client.json", "w"), indent=1)
     group.insert(0, dict(gob, tag="proxy-gecko"))
 
+tuic_file = f"{etc}/tuic.json"
+if os.path.exists(tuic_file):
+    t = json.load(open(tuic_file))
+    tob = {"type": "tuic", "tag": "proxy", "server": ip,
+           "server_port": int(t.get("port", 8443)),
+           "uuid": t["uuid"], "password": t["password"],
+           "congestion_control": "bbr", "udp_relay_mode": "native",
+           "zero_rtt_handshake": False,
+           "tls": {"enabled": True, "insecure": True,
+                   "server_name": "ofogheamn", "alpn": ["h3"]}}
+    json.dump(client([tob], "proxy"),
+              open("/root/ofogh-tuic-client.json", "w"), indent=1)
+    group.append(dict(tob, tag="proxy-tuic"))
+
 rc_file = f"{etc}/reality-clients.json"
 if os.path.exists(rc_file):
     rc = json.load(open(rc_file))
@@ -261,6 +278,8 @@ dig @127.0.0.1 demonware.net +time=3 +tries=1 2>/dev/null | grep -q 'status: NOE
   && echo "PASS dns answers (demonware.net)" || echo "WARN dns check failed"
 ss -lun 2>/dev/null | grep -q ':2083 ' \
   && echo "PASS gecko listener udp/2083" || echo "WARN gecko listener not seen"
+ss -lun 2>/dev/null | grep -q ':8443 ' \
+  && echo "PASS tuic listener udp/8443" || echo "WARN tuic listener not seen"
 iptables -t nat -S 2>/dev/null | grep -q '20000' \
   && echo "PASS port-hopping NAT present" || echo "WARN port-hopping NAT not seen"
 [ -f /root/ofogh-gecko-client.json ] \

@@ -383,6 +383,12 @@ has scripts/apply-node-profile.sh 'ofogh-gateway.json'
 chk "node profile emits the console gateway config" $?
 has scripts/apply-node-profile.sh 'hijack-dns'
 chk "gateway config hijacks LAN DNS to the node resolver" $?
+has scripts/apply-node-profile.sh 'ofogheamn-dns tuic enable'
+chk "node profile enables TUIC as a QUIC rung" $?
+has scripts/apply-node-profile.sh 'proxy-tuic'
+chk "auto client group includes TUIC" $?
+has scripts/apply-node-profile.sh 'udp_relay_mode'
+chk "TUIC client uses native UDP relay" $?
 has config/smartdns.conf 'domain-set:cod/ -speed-check-mode tcp:443 -response-mode fastest-response'
 chk "cod set answers fastest-response for session setup" $?
 rm -rf "$SD_DIR"

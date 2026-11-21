@@ -1,3 +1,14 @@
+## v1.22 — 2026-11-21 (TUIC joins the ladder)
+
+- **The better-than-SOCKS5 legs are now the whole ladder**:
+  SOCKS5 (1996) keeps only its proper job — the LAN-side entry
+  point that apps and consoles speak. Game traffic's WAN leg
+  rides UDP-native QUIC transports, and the node profile now
+  enables **TUIC** alongside Hysteria2/Gecko, adding it to the
+  self-healing urltest group (Gecko → Hysteria2 → TUIC →
+  REALITY) and emitting /root/ofogh-tuic-client.json. TUIC is
+  the lightest QUIC rung: native UDP relay, BBR, no 0-RTT.
+
 ## v1.21 — 2026-11-21 (console gateway kit)
 
 - **The console path is now a first-class deliverable**: the
