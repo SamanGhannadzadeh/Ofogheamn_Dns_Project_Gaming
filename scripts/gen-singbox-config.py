@@ -119,6 +119,7 @@ def main() -> int:
             "listen": "::",
             "listen_port": hy2_port,
             "users": [{"password": h["password"]}],
+            "bbr_profile": h.get("bbr_profile", "conservative"),
             "tls": {
                 "enabled": True,
                 "certificate_path": os.path.join(ETC, "tls", "fullchain.pem"),
@@ -139,9 +140,41 @@ def main() -> int:
                                  "url": h["masquerade_url"],
                                  "rewrite_host": True}
         inbounds.append(hy2)
+    # Optional PARALLEL Hysteria2+Gecko inbound (v1.17, from the
+    # 2026 Iran-DPI research): a second hy2 listener whose obfs is
+    # Gecko — Salamander scrambling PLUS fragmentation of the QUIC
+    # long-header (handshake) packets, which breaks the ~1200-byte
+    # Initial size clustering plain Salamander leaves behind. It
+    # runs alongside the main inbound so existing clients keep
+    # working untouched. On this listener obfs REPLACES the
+    # masquerade: a prober without the obfs password gets silence.
+    gecko_file = os.path.join(ETC, "hysteria2-gecko.json")
+    gecko_port = None
+    if os.path.exists(gecko_file):
+        with open(gecko_file, encoding="utf-8") as fh:
+            g = json.load(fh)
+        gecko_port = int(g.get("port", 2083))
+        inbounds.append({
+            "type": "hysteria2",
+            "tag": "ofogh-hysteria2-gecko",
+            "listen": "::",
+            "listen_port": gecko_port,
+            "users": [{"password": g["password"]}],
+            "bbr_profile": g.get("bbr_profile", "conservative"),
+            "obfs": {"type": "gecko",
+                     "password": g["obfs_password"],
+                     "min_packet_size": int(g.get("min_packet_size", 512)),
+                     "max_packet_size": int(g.get("max_packet_size", 1200))},
+            "tls": {
+                "enabled": True,
+                "certificate_path": os.path.join(ETC, "tls", "fullchain.pem"),
+                "key_path": os.path.join(ETC, "tls", "privkey.pem"),
+            },
+        })
     # Optional TUIC v5 inbound (the other QUIC rung: gentler
-    # congestion control than Hysteria2's Brutal — BBR here —
-    # plus 0-RTT; enabled via `ofogheamn-dns tuic enable`,
+    # congestion control than Hysteria2's Brutal — BBR here;
+    # 0-RTT stays OFF (replay risk, per sing-box docs);
+    # enabled via `ofogheamn-dns tuic enable`,
     # which writes /etc/ofogheamn-dns/tuic.json).
     tuic_file = os.path.join(ETC, "tuic.json")
     tuic_port = None
@@ -156,7 +189,7 @@ def main() -> int:
             "listen_port": tuic_port,
             "users": [{"uuid": t["uuid"], "password": t["password"]}],
             "congestion_control": "bbr",
-            "zero_rtt_handshake": True,
+            "zero_rtt_handshake": False,
             "tls": {
                 "enabled": True,
                 "certificate_path": os.path.join(ETC, "tls", "fullchain.pem"),
@@ -209,7 +242,8 @@ def main() -> int:
         },
         "inbounds": inbounds,
         "outbounds": [{"type": "direct", "tag": "direct",
-                       "tcp_fast_open": True}],
+                       "tcp_fast_open": True,
+                       "domain_strategy": "prefer_ipv6"}],
         "route": {"final": "direct"},
     }
     out = os.path.join(ETC, "singbox.json")
@@ -220,6 +254,7 @@ def main() -> int:
           + (f", console port {console_port} (no auth, firewall-guarded)"
              if console_port else "")
           + (f", hysteria2 port {hy2_port}" if hy2_port else "")
+          + (f", hysteria2-gecko port {gecko_port}" if gecko_port else "")
           + (f", tuic port {tuic_port}" if tuic_port else "")
           + (f", anytls port {anytls_port}" if anytls_port else ""))
     return 0

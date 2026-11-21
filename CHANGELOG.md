@@ -1,3 +1,22 @@
+## v1.17 — 2026-11-21 (Iran-DPI research round)
+
+- **Parallel Hysteria2+Gecko inbound** (`ofogheamn-dns hysteria2-gecko
+  enable [port]`, default udp/2083): a second hy2 listener whose obfs
+  is Gecko — Salamander scrambling plus fragmentation of the QUIC
+  handshake packets, breaking the ~1200-byte Initial clustering plain
+  Salamander leaves. It runs alongside the main inbound, so existing
+  clients keep working untouched; on this listener obfs replaces the
+  masquerade (a prober without the obfs password gets silence).
+- **Hysteria2 uses BBR `conservative` by default** (`bbr_profile` in
+  hysteria2.json): fixed-rate Brutal-style behaviour is neither
+  configured nor encouraged — it does not resemble real HTTP/3.
+- **TUIC 0-RTT is now OFF** (`zero_rtt_handshake: false`): replay
+  risk per the sing-box docs; two independent reviews agreed.
+- **SOCKS passes IPv6**: the direct outbound prefers IPv6 for
+  domain targets (`domain_strategy: prefer_ipv6`, IPv4 fallback
+  kept), complementing the dual-stack listeners and SmartDNS
+  dual-stack selection that were already on.
+
 ## v1.16 — 2026-11-21 (consultation round: durability + ECS depth)
 
 - **The generator now emits the live-proven proxy tuning itself**:

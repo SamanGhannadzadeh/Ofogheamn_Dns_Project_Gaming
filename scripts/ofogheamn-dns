@@ -346,6 +346,42 @@ PY
         systemctl restart ofogheamn-proxy 2>/dev/null || true ;;
       *) [ -f /etc/ofogheamn-dns/hysteria2.json ] && echo "Hysteria2: on" || echo "Hysteria2: off" ;;
     esac ;;
+  hysteria2-gecko)
+    shift
+    case "${1:-status}" in
+      enable)
+        need_root
+        command -v sing-box >/dev/null || { echo "sing-box not installed"; exit 1; }
+        GPORT="${2:-2083}"
+        python3 - "$GPORT" <<'PY'
+import json, sys, os, secrets
+p = "/etc/ofogheamn-dns/hysteria2-gecko.json"
+# Reuse the main Hysteria2 user password when there is one, so a
+# client keeps a single password across both hy2 listeners.
+pw = None
+main = "/etc/ofogheamn-dns/hysteria2.json"
+if os.path.exists(main):
+    pw = json.load(open(main)).get("password")
+cfg = {"port": int(sys.argv[1]),
+       "password": pw or secrets.token_hex(16),
+       "obfs_password": secrets.token_hex(16),
+       "min_packet_size": 512, "max_packet_size": 1200}
+with open(p, "w") as fh: json.dump(cfg, fh, indent=2)
+os.chmod(p, 0o600)
+print("hysteria2-gecko enabled on udp/" + sys.argv[1] + " (parallel to the main Hysteria2; existing clients untouched)")
+print("passwords are stored in " + p + " (mode 600)")
+PY
+        gen_proxy
+        systemctl restart ofogheamn-proxy 2>/dev/null || true
+        bash /usr/local/bin/ofogheamn-firewall >/dev/null 2>&1 || true ;;
+      disable)
+        need_root; rm -f /etc/ofogheamn-dns/hysteria2-gecko.json
+        gen_proxy
+        systemctl restart ofogheamn-proxy 2>/dev/null || true
+        bash /usr/local/bin/ofogheamn-firewall >/dev/null 2>&1 || true
+        echo "Hysteria2-Gecko disabled" ;;
+      *) [ -f /etc/ofogheamn-dns/hysteria2-gecko.json ] && echo "Hysteria2-Gecko: on" || echo "Hysteria2-Gecko: off" ;;
+    esac ;;
   tuic)
     shift
     case "${1:-status}" in
@@ -360,7 +396,7 @@ cfg = {"port": int(sys.argv[1]), "uuid": str(uuid.uuid4()),
        "password": secrets.token_hex(16)}
 with open(p, "w") as fh: json.dump(cfg, fh, indent=2)
 os.chmod(p, 0o600)
-print("tuic v5 enabled on udp/" + sys.argv[1] + " (BBR, 0-RTT)")
+print("tuic v5 enabled on udp/" + sys.argv[1] + " (BBR, 0-RTT off)")
 print("uuid + password are stored in " + p + " (mode 600)")
 PY
         gen_proxy
