@@ -1,3 +1,33 @@
+## v1.30 — 2026-11-22 (gap hunt: more games, BBR node-wide, game-UDP pinning)
+
+- **Five more titles get the full CoD treatment.** Fortnite,
+  EA FC/FIFA, Valorant, Apex and PUBG were single names inside
+  the big gaming list with generic handling; each now has its
+  own set — strict tcp:443 measurement, fastest-response, a
+  120 s TTL floor, cache warming, and the ECS edge group on
+  profiled nodes. The cache warmer now warms EVERY *.domains
+  set, so future sets join automatically.
+- **The node's own TCP now runs BBR + fq.** The gaming sysctl
+  file set buffers, conntrack and fast-open but left the
+  congestion control at the distro default; `default_qdisc=fq`
+  and `tcp_congestion_control=bbr` are in — the node's TCP
+  rungs (REALITY, AnyTLS, downloads) pace like the QUIC rungs
+  already did.
+- **Game UDP is pinned to the QUIC rungs in the combined
+  client.** The auto urltest could land on a TCP rung, which
+  would tunnel game UDP over TCP (head-of-line blocking,
+  jitter). A dedicated `game-udp` urltest group (Gecko /
+  Hysteria2 / TUIC only) now takes the well-known game ports
+  first; everything else still rides auto. The gateway variant
+  inherits it.
+- Checked and already present, so unchanged: dualstack IP
+  selection (threshold 50), serve-stale, cache persistence,
+  fastest-response everywhere on game sets, 10-minute UDP
+  sessions, port hopping. Checked and still placebo, so still
+  not shipped: DSCP beyond the node's own queue (bleached on
+  the public internet) and packet duplication over a single
+  path (theatre — it needs two genuinely separate paths).
+
 ## v1.29 — 2026-11-22 (DDNS: the node follows your home IP)
 
 - **New: the DDNS allowlist keeper.** A private node trusts the

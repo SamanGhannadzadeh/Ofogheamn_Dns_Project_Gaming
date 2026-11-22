@@ -440,6 +440,18 @@ printf '#!/bin/sh\necho 203.0.113.8\n' > "$DT/bin/dig"
 PATH="$DT/bin:$PATH" OFOGH_ETC="$DT/etc" bash scripts/ofogh-ddns-allowlist.sh
 grep -qx "203.0.113.8" "$DT/etc/allowlist.txt" && ! grep -qx "203.0.113.7" "$DT/etc/allowlist.txt" && grep -qx "198.51.100.9" "$DT/etc/allowlist.txt"
 chk "ddns keeper swaps the old DDNS IP for the new one" $?
+has config/smartdns.conf 'domain-set -name fortnite'
+chk "template wires a dedicated Fortnite set" $?
+has config/smartdns.conf 'domain-set -name valorant'
+chk "template wires a dedicated Valorant set" $?
+has scripts/apply-node-profile.sh 'for s in fortnite fifa valorant apex pubg'
+chk "profile moves the new game sets to the ECS edge group" $?
+has scripts/apply-node-profile.sh 'tcp_congestion_control = bbr'
+chk "profile sets BBR + fq as the node defaults" $?
+has scripts/apply-node-profile.sh 'game-udp'
+chk "combined client pins game UDP to the QUIC rungs" $?
+has install.sh 'fortnite.domains'
+chk "installer ships the new game lists" $?
 has config/smartdns.conf 'domain-set:cod/ -speed-check-mode tcp:443 -response-mode fastest-response'
 chk "cod set answers fastest-response for session setup" $?
 rm -rf "$SD_DIR"

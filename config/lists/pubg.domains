@@ -1,0 +1,6 @@
+# PUBG / Krafton — dedicated set (v1.30): edge (ECS) treatment,
+# strict measurement, TTL floor, cache warming.
+# Entries are suffixes: subdomains are covered automatically.
+pubg.com
+pubgmobile.com
+krafton.com

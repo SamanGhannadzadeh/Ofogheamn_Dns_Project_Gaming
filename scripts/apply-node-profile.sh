@@ -56,6 +56,9 @@ echo "== node profile iran-baku: admin=$ADMIN_IP subnet=$CLIENT_SUBNET server=$S
 
 # --- 1. SmartDNS edge group + floors -------------------------------------
 sed -i 's#^nameserver /domain-set:cod/gaming#nameserver /domain-set:cod/edge#' "$CONF"
+for s in fortnite fifa valorant apex pubg; do
+  sed -i "s#^nameserver /domain-set:$s/gaming#nameserver /domain-set:$s/edge#" "$CONF"
+done
 sed -i 's#^nameserver /domain-set:learned/gaming#nameserver /domain-set:learned/edge#' "$CONF"
 grep -q 'domain-set -name learned' "$CONF" || \
   echo "domain-set -name learned -file $ETC/lists/learned.domains" >> "$CONF"
@@ -116,6 +119,8 @@ net.netfilter.nf_conntrack_udp_timeout_stream = 300
 net.core.rmem_max = 16777216
 net.core.wmem_max = 16777216
 net.ipv4.tcp_fastopen = 3
+net.core.default_qdisc = fq
+net.ipv4.tcp_congestion_control = bbr
 EOF
 sysctl -p /etc/sysctl.d/99-ofogheamn-gaming.conf >/dev/null
 
@@ -131,7 +136,7 @@ cat > /usr/local/bin/ofogh-warm-all.sh <<'EOF'
 # Warm the whole gaming sets (A + AAAA) so every gaming lookup is
 # a cache hit; serve-expired covers the gaps between runs.
 LISTS=/etc/ofogheamn-dns/lists
-{ cat "$LISTS/gaming.domains" "$LISTS/cod.domains" "$LISTS/psn.domains" "$LISTS/learned.domains" 2>/dev/null; } \
+{ cat "$LISTS"/*.domains 2>/dev/null; } \
   | grep -vE '^[[:space:]]*(#|$)' | sort -u \
   | xargs -P 8 -I{} sh -c 'dig @127.0.0.1 {} A >/dev/null 2>&1; dig @127.0.0.1 {} AAAA >/dev/null 2>&1'
 EOF
@@ -211,10 +216,24 @@ client_hop = f"{hop_start}-{hop_start + 400}"
 hy2 = json.load(open(f"{etc}/hysteria2.json"))
 tls = {"enabled": True, "insecure": True, "server_name": "ofogheamn"}
 
-def client(outbounds, final):
-    # The route rule carries udp_timeout: without it, sniffed UDP
-    # sessions are reaped at the 10 s/30 s protocol defaults and
-    # long game sessions die mid-match (research 2026-11-21).
+def client(outbounds, final, game_tag=None):
+    # The catch-all route rule carries udp_timeout: without it,
+    # sniffed UDP sessions are reaped at the 10 s/30 s protocol
+    # defaults and long game sessions die mid-match (research
+    # 2026-11-21). When game_tag is given, the well-known game
+    # ports are pinned to that group FIRST: game UDP must ride
+    # only UDP-native (QUIC) rungs — if the general urltest ever
+    # lands on a TCP rung (REALITY/AnyTLS), game UDP would be
+    # tunnelled over TCP and head-of-line blocking would wreck
+    # in-match jitter.
+    rules = []
+    if game_tag:
+        rules.append({"action": "route", "network": "udp",
+                      "port": [88, 500, 3074, 3075, 3076, 3478, 3479,
+                               3480, 3544, 4500, 9308, 27015],
+                      "outbound": game_tag})
+    rules.append({"action": "route", "outbound": final,
+                  "udp_timeout": "10m"})
     return {
         "dns": {"final": "remote",
                 "servers": [{"detour": final, "server": ip,
@@ -225,8 +244,7 @@ def client(outbounds, final):
         "log": {"level": "warn"},
         "outbounds": outbounds + [{"tag": "direct", "type": "direct"}],
         "route": {"auto_detect_interface": True, "final": final,
-                  "rules": [{"action": "route", "outbound": final,
-                             "udp_timeout": "10m"}]},
+                  "rules": rules},
     }
 
 main = {"type": "hysteria2", "tag": "proxy", "server": ip,
@@ -315,7 +333,12 @@ auto = {"type": "urltest", "tag": "auto",
         "outbounds": [o["tag"] for o in group],
         "url": "https://www.gstatic.com/generate_204",
         "interval": "30s", "tolerance": 150}
-json.dump(client([auto] + group, "auto"),
+game = {"type": "urltest", "tag": "game-udp",
+        "outbounds": [o["tag"] for o in group
+                      if o["type"] in ("hysteria2", "tuic")],
+        "url": "https://www.gstatic.com/generate_204",
+        "interval": "30s", "tolerance": 100}
+json.dump(client([auto, game] + group, "auto", game_tag="game-udp"),
           open("/root/ofogh-client.json", "w"), indent=1)
 
 # Console gateway variant (research 2026-11-21, checklist item 1):
@@ -326,7 +349,7 @@ json.dump(client([auto] + group, "auto"),
 # pattern as GearUP's HYPEREV and the LagoFast Box). LAN DNS is
 # hijacked to the node resolver; everything else rides the auto
 # group.
-gateway = client([auto] + group, "auto")
+gateway = client([auto, game] + group, "auto", game_tag="game-udp")
 gateway["inbounds"] = [{
     "address": ["172.19.0.1/30", "fdfe:dcba:9876::1/126"],
     "auto_redirect": True, "auto_route": True, "mtu": 1280,
