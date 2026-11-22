@@ -23,16 +23,31 @@ load_set() {
   grep -vE '^[[:space:]]*(#|$)' "$file" | while read -r r; do
     ipset add "$name" "$r" -exist 2>/dev/null
   done
-  iptables -t mangle -C OUTPUT -o "$IFACE" -p udp -m set --match-set "$name" dst \
-    -j DSCP --set-dscp-class EF 2>/dev/null || \
-  iptables -t mangle -A OUTPUT -o "$IFACE" -p udp -m set --match-set "$name" dst \
-    -j DSCP --set-dscp-class EF
+  # All ports, both protocols: game traffic to these ranges is
+  # marked EF whether it rides UDP (gameplay) or TCP (logins,
+  # downloads, store) — the set rule carries no port filter.
+  for proto in udp tcp; do
+    iptables -t mangle -C OUTPUT -o "$IFACE" -p "$proto" -m set --match-set "$name" dst \
+      -j DSCP --set-dscp-class EF 2>/dev/null || \
+    iptables -t mangle -A OUTPUT -o "$IFACE" -p "$proto" -m set --match-set "$name" dst \
+      -j DSCP --set-dscp-class EF
+  done
 }
 
-for p in 3074 3075 3076 9308; do
+# Well-known console/game ports to ANY destination (the ranges
+# above cannot cover every game server on earth): Xbox Live
+# 88/500/3074/3544/4500, PlayStation Network 3478/3479/3480,
+# Call of Duty 3075/3076/9308, Steam/Source 27015.
+for p in 88 500 3074 3075 3076 3478 3479 3544 4500 9308 27015; do
   iptables -t mangle -C OUTPUT -o "$IFACE" -p udp --dport "$p" \
     -j DSCP --set-dscp-class EF 2>/dev/null || \
   iptables -t mangle -A OUTPUT -o "$IFACE" -p udp --dport "$p" \
+    -j DSCP --set-dscp-class EF
+done
+for p in 3074 3480 27015; do
+  iptables -t mangle -C OUTPUT -o "$IFACE" -p tcp --dport "$p" \
+    -j DSCP --set-dscp-class EF 2>/dev/null || \
+  iptables -t mangle -A OUTPUT -o "$IFACE" -p tcp --dport "$p" \
     -j DSCP --set-dscp-class EF
 done
 

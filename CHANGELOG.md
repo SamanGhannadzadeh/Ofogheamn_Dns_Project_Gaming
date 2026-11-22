@@ -1,3 +1,18 @@
+## v1.27 — 2026-11-22 (gaming QoS: all ports, both protocols)
+
+- **The gaming sets now mark on every port and both
+  protocols**: the cod/dc range rules were UDP-only; they now
+  mark TCP too (logins, downloads, store traffic to game
+  ranges get the same EF treatment as gameplay UDP). The
+  any-destination game-port list grew from 4 UDP ports to the
+  well-known console/game set — Xbox Live (88, 500, 3074,
+  3544, 4500), PSN (3478, 3479, 3480), Call of Duty (3075,
+  3076, 9308), Steam (27015) — UDP and TCP where each applies.
+  Marking stays scoped to game ranges + game ports on purpose:
+  marking everything would mark nothing, and DSCP is bleached
+  on the public internet anyway — its real effect is the
+  node's own queue, as documented since v1.20.
+
 ## v1.26 — 2026-11-22 (the DNS learns; configs from the panel)
 
 - **Self-learning gaming set**: `ofogh-learn-domains` (daily

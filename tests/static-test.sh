@@ -413,6 +413,10 @@ has config/smartdns.conf 'domain-set -name learned'
 chk "template routes the learned set with gaming treatment" $?
 has panel/panel.py '/api/client-file'
 chk "panel serves client config downloads" $?
+has scripts/ofogheamn-qos.sh 'for proto in udp tcp'
+chk "QoS marks game ranges on both protocols, all ports" $?
+has scripts/ofogheamn-qos.sh '3478'
+chk "QoS covers the well-known console game ports" $?
 has config/smartdns.conf 'domain-set:cod/ -speed-check-mode tcp:443 -response-mode fastest-response'
 chk "cod set answers fastest-response for session setup" $?
 rm -rf "$SD_DIR"
