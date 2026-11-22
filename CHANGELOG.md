@@ -1,3 +1,21 @@
+## v1.28 — 2026-11-22 (the console port speaks only what a PS5 speaks)
+
+- **The console port (2081) is now a pure HTTP inbound.** It was
+  a mixed (SOCKS5+HTTP) inbound; a PS5 implements exactly one
+  proxy protocol — HTTP — so the port now speaks only that, by
+  the owner's order ("only the proxies the PS5 directly
+  supports"). Through it the console's TCP reaches every IP
+  range and every port, as before; nothing the console could
+  do has changed, and one unused protocol surface is gone.
+  Stated plainly in the generator's docstring, because it is
+  the project's standing fact: console game UDP never enters
+  the console's proxy setting at all — no server-side proxy of
+  any kind can carry what the console itself never sends to a
+  proxy. The DNS side is already at its measured ceiling
+  (warm answers ~0 ms, fastest-IP, ECS edge steering,
+  serve-stale), and the remaining in-game ping is the physical
+  path — decided by where the node sits, not by protocol.
+
 ## v1.27 — 2026-11-22 (gaming QoS: all ports, both protocols)
 
 - **The gaming sets now mark on every port and both

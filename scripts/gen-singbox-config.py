@@ -11,7 +11,11 @@ Optional console inbound: game consoles (PS5/Xbox) offer an HTTP
 proxy setting with NO username/password fields, so the
 authenticated port can never work for them. When
 /etc/ofogheamn-dns/console.json exists ({"port": 2081}), a second
-mixed inbound WITHOUT auth is added on that port. It is safe only
+inbound WITHOUT auth is added on that port — HTTP only, because
+HTTP is the one and only proxy protocol a console implements
+natively; it carries the console's TCP (web, store, downloads)
+to every IP and port, and console game UDP never enters the
+console's proxy setting at all. It is safe only
 because ofogheamn-firewall guards the console port with the
 private-mode allowlist (and drops it entirely in public mode);
 never expose it any other way. Managed by:
@@ -44,20 +48,19 @@ def main() -> int:
         }
     ]
     # Optional console inbound (see module docstring): no auth, for
-    # PS5/Xbox proxy settings. The firewall guards this port.
+    # PS5/Xbox proxy settings. HTTP only — the single proxy
+    # protocol a console speaks natively.
     console_file = os.path.join(ETC, "console.json")
     console_port = None
     if os.path.exists(console_file):
         with open(console_file, encoding="utf-8") as fh:
             console_port = int(json.load(fh).get("port", 2081))
         inbounds.append({
-            "type": "mixed",
+            "type": "http",
             "tag": "ofogh-console",
             "listen": "::",
             "listen_port": console_port,
             "tcp_fast_open": True,
-            "udp_timeout": "10m",
-            "udp_fragment": True,
         })
     # Optional VLESS+REALITY inbound (transport fallback ladder, top
     # rung for filtered paths — enabled via `ofogheamn-dns reality

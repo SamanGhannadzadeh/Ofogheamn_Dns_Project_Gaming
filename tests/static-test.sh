@@ -110,6 +110,8 @@ off = [i.get("tag") for i in json.load(open(gt + "/off.json"))["inbounds"]]
 on = [i.get("tag") for i in json.load(open(gt + "/on.json"))["inbounds"]]
 assert "ofogh-console" not in off, "console inbound without console.json"
 assert "ofogh-console" in on, "console inbound missing with console.json"
+ctype = [i.get("type") for i in json.load(open(gt + "/on.json"))["inbounds"] if i.get("tag") == "ofogh-console"][0]
+assert ctype == "http", "console inbound must be HTTP only (the one proxy protocol a PS5 speaks)"
 EOF
 chk "generator emits console inbound only with console.json" $?
 # Hysteria2 (v1.7): generator, firewall and CLI must agree, and
