@@ -127,6 +127,7 @@ install -m 755 "$SRC_DIR/scripts/ofogheamn-firewall.sh" /usr/local/bin/ofogheamn
 install -m 755 "$SRC_DIR/scripts/ofogheamn-qos.sh" /usr/local/bin/ofogheamn-qos
 install -m 755 "$SRC_DIR/scripts/update-dc-ranges.py" /usr/local/bin/update-dc-ranges
 install -m 755 "$SRC_DIR/scripts/ofogh-learn-domains.sh" /usr/local/bin/ofogh-learn-domains
+install -m 755 "$SRC_DIR/scripts/ofogh-ddns-allowlist.sh" /usr/local/bin/ofogh-ddns-allowlist
 install -m 755 "$SRC_DIR/scripts/update-blocklist.sh" /usr/local/bin/update-blocklist
 mkdir -p /usr/local/lib/ofogheamn-dns
 [ "$LITE" != "1" ] && install -m 644 "$SRC_DIR/panel/panel.py" /usr/local/lib/ofogheamn-dns/panel.py || true
@@ -247,6 +248,8 @@ cp "$SRC_DIR/systemd/ofogheamn-recursive.service" /etc/systemd/system/ofogheamn-
 cp "$SRC_DIR/systemd/ofogheamn-mesh.service" /etc/systemd/system/ofogheamn-mesh.service
 cp "$SRC_DIR/systemd/ofogheamn-health.service" /etc/systemd/system/ofogheamn-health.service
 cp "$SRC_DIR/systemd/ofogheamn-health.timer" /etc/systemd/system/ofogheamn-health.timer
+cp "$SRC_DIR/systemd/ofogh-ddns.service" /etc/systemd/system/ofogh-ddns.service
+cp "$SRC_DIR/systemd/ofogh-ddns.timer" /etc/systemd/system/ofogh-ddns.timer
 # Mesh is OPT-IN: installed but never enabled by the installer.
 # The owner turns it on with: ofogheamn-dns mesh on
 touch /etc/ofogheamn-dns/mesh-upstream.conf

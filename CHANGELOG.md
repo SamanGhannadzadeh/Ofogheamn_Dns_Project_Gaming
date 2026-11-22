@@ -1,3 +1,20 @@
+## v1.29 — 2026-11-22 (DDNS: the node follows your home IP)
+
+- **New: the DDNS allowlist keeper.** A private node trusts the
+  admin by home IP — but a home IP changes, and the admin is
+  locked out of their own node. The modem's Dynamic DNS page
+  (No-IP / DynDNS / TZO) keeps a hostname pointing at the home
+  IP; now the node follows it. `ofogheamn-dns ddns set
+  <hostname>` arms a 5-minute timer (ofogh-ddns.timer) that
+  resolves the hostname and swaps the DDNS-contributed IPs in
+  the allowlist, re-applying the firewall only on change. It
+  removes only IPs it added itself (tracked in ddns-state.txt),
+  never touches hand-written allowlist lines, and a failed
+  lookup keeps the old IPs — a DNS hiccup must never lock the
+  admin out. The node profile seeds it with OFOGH_DDNS_HOST.
+  (DDNS itself moves no traffic and changes no ping — it is a
+  name for your home, and this is its one real job here.)
+
 ## v1.28 — 2026-11-22 (the console port speaks only what a PS5 speaks)
 
 - **The console port (2081) is now a pure HTTP inbound.** It was

@@ -255,6 +255,29 @@ PY
         echo "console port disabled" ;;
       *) if [ -f /etc/ofogheamn-dns/console.json ]; then echo "console: on (port $(python3 -c "import json;print(json.load(open('/etc/ofogheamn-dns/console.json'))['port'])" 2>/dev/null || echo 2081))"; else echo "console: off"; fi ;;
     esac ;;
+  ddns)
+    shift
+    case "${1:-status}" in
+      set)
+        need_root
+        [ -n "${2:-}" ] || { echo "usage: ofogheamn-dns ddns set <hostname>" ; exit 1; }
+        printf '%s\n' "$2" > /etc/ofogheamn-dns/ddns.conf
+        chmod 600 /etc/ofogheamn-dns/ddns.conf
+        systemctl enable --now ofogh-ddns.timer >/dev/null 2>&1 || true
+        /usr/local/bin/ofogh-ddns-allowlist || true
+        echo "ddns: $2 — the node follows this hostname's IP in the allowlist (checked every 5 min)" ;;
+      clear)
+        need_root
+        if [ -f /etc/ofogheamn-dns/ddns-state.txt ] && [ -f /etc/ofogheamn-dns/allowlist.txt ]; then
+          grep -vxF -f /etc/ofogheamn-dns/ddns-state.txt /etc/ofogheamn-dns/allowlist.txt > /etc/ofogheamn-dns/allowlist.tmp || true
+          mv /etc/ofogheamn-dns/allowlist.tmp /etc/ofogheamn-dns/allowlist.txt
+          bash /usr/local/bin/ofogheamn-firewall >/dev/null 2>&1 || true
+        fi
+        rm -f /etc/ofogheamn-dns/ddns.conf /etc/ofogheamn-dns/ddns-state.txt
+        systemctl disable --now ofogh-ddns.timer >/dev/null 2>&1 || true
+        echo "ddns cleared (the IPs it had added were removed from the allowlist)" ;;
+      *) if [ -f /etc/ofogheamn-dns/ddns.conf ]; then echo "ddns: $(cat /etc/ofogheamn-dns/ddns.conf) (current IPs: $(paste -sd, /etc/ofogheamn-dns/ddns-state.txt 2>/dev/null || echo none))"; else echo "ddns: off"; fi ;;
+    esac ;;
   reality)
     shift
     case "${1:-status}" in

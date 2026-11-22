@@ -184,6 +184,17 @@ printf '%s\n%s\n' "$ADMIN_IP" "$SERVER_IP" > "$ETC/allowlist.txt"
 echo "mode=private" > "$ETC/mode.conf"
 bash /usr/local/bin/ofogheamn-firewall >/dev/null 2>&1 || true
 
+# Optional: follow the admin's Dynamic DNS hostname (the modem's
+# DDNS page keeps it pointing at the home IP), so a home-IP change
+# never locks the admin out — ofogh-ddns.timer re-checks every
+# 5 min. Set OFOGH_DDNS_HOST to enable.
+if [ -n "${OFOGH_DDNS_HOST:-}" ]; then
+  printf '%s\n' "$OFOGH_DDNS_HOST" > "$ETC/ddns.conf"
+  chmod 600 "$ETC/ddns.conf"
+  systemctl enable --now ofogh-ddns.timer >/dev/null 2>&1 || true
+  /usr/local/bin/ofogh-ddns-allowlist || true
+fi
+
 # --- 7. Services + host resolver ------------------------------------------
 systemctl restart ofogheamn-dns ofogheamn-proxy 2>/dev/null || true
 sleep 2

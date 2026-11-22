@@ -1,0 +1,7 @@
+[Unit]
+Description=Sync the allowlist with the admin's DDNS hostname
+After=network-online.target ofogheamn-dns.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/ofogh-ddns-allowlist

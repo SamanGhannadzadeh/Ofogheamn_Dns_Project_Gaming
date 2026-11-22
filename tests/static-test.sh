@@ -419,6 +419,27 @@ has scripts/ofogheamn-qos.sh 'for proto in udp tcp'
 chk "QoS marks game ranges on both protocols, all ports" $?
 has scripts/ofogheamn-qos.sh '3478'
 chk "QoS covers the well-known console game ports" $?
+has install.sh 'ofogh-ddns-allowlist'
+chk "installer installs the DDNS allowlist keeper" $?
+has scripts/ofogheamn-dns 'ddns)'
+chk "CLI exposes the ddns command" $?
+has systemd/ofogh-ddns.timer 'OnUnitActiveSec=5min'
+chk "DDNS keeper runs every 5 minutes" $?
+has scripts/apply-node-profile.sh 'OFOGH_DDNS_HOST'
+chk "node profile can seed the DDNS hostname" $?
+# Functional: the keeper adds the resolved IP, keeps manual
+# allowlist lines, and swaps the DDNS IP when the hostname moves.
+DT=$(mktemp -d); mkdir -p "$DT/bin" "$DT/etc"
+printf '#!/bin/sh\necho 203.0.113.7\n' > "$DT/bin/dig"; chmod +x "$DT/bin/dig"
+echo "myhome.example.com" > "$DT/etc/ddns.conf"
+echo "198.51.100.9" > "$DT/etc/allowlist.txt"
+PATH="$DT/bin:$PATH" OFOGH_ETC="$DT/etc" bash scripts/ofogh-ddns-allowlist.sh
+grep -qx "203.0.113.7" "$DT/etc/allowlist.txt" && grep -qx "198.51.100.9" "$DT/etc/allowlist.txt"
+chk "ddns keeper adds the resolved IP and keeps manual entries" $?
+printf '#!/bin/sh\necho 203.0.113.8\n' > "$DT/bin/dig"
+PATH="$DT/bin:$PATH" OFOGH_ETC="$DT/etc" bash scripts/ofogh-ddns-allowlist.sh
+grep -qx "203.0.113.8" "$DT/etc/allowlist.txt" && ! grep -qx "203.0.113.7" "$DT/etc/allowlist.txt" && grep -qx "198.51.100.9" "$DT/etc/allowlist.txt"
+chk "ddns keeper swaps the old DDNS IP for the new one" $?
 has config/smartdns.conf 'domain-set:cod/ -speed-check-mode tcp:443 -response-mode fastest-response'
 chk "cod set answers fastest-response for session setup" $?
 rm -rf "$SD_DIR"
