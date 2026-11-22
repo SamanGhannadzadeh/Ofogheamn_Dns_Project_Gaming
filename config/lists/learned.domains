@@ -1,0 +1,6 @@
+# Learned gaming domains — starts empty on purpose.
+# ofogh-learn-domains fills this file on the node itself:
+# domains the customers actually query whose answers land
+# inside the cod/dc IP ranges. Never edit by hand; the learner
+# owns it. It ships in the repo so the SmartDNS domain-set
+# always has a file to load.

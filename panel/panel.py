@@ -290,6 +290,17 @@ def _json_file(name):
         return None
 
 
+CLIENT_FILES = {
+    "auto": ("/root/ofogh-client.json", "کانفیگ خودترمیم (پیشنهاد اصلی)"),
+    "gecko": ("/root/ofogh-gecko-client.json", "Gecko"),
+    "hy2": ("/root/ofogh-hy2-client.json", "Hysteria2"),
+    "tuic": ("/root/ofogh-tuic-client.json", "TUIC"),
+    "anytls": ("/root/ofogh-anytls-client.json", "AnyTLS"),
+    "https": ("/root/ofogh-https-client.json", "پروکسی HTTPS"),
+    "gateway": ("/root/ofogh-gateway.json", "گیت‌وی کنسول (اختیاری)"),
+}
+
+
 def transports_get():
     """Read-only state of every optional transport, mirroring
     the JSON state files the CLI writes. Toggling happens
@@ -444,6 +455,25 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, status())
         if path == "/api/health":
             return self._json(200, health_get())
+        if path == "/api/clients":
+            return self._json(200, {"clients": [
+                {"key": k, "label": lbl, "exists": os.path.exists(p)}
+                for k, (p, lbl) in CLIENT_FILES.items()]})
+        if path == "/api/client-file":
+            ent = CLIENT_FILES.get((qs.get("name") or [""])[0])
+            if not ent or not os.path.exists(ent[0]):
+                return self._json(404, {"error": "not found"})
+            with open(ent[0], "rb") as fh:
+                body = fh.read()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Disposition",
+                             'attachment; filename="%s"'
+                             % os.path.basename(ent[0]))
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if path == "/api/hijack":
             return self._json(200, {"rules": hijack_list()})
         if path == "/api/domains":
@@ -878,6 +908,7 @@ pre{background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:10
     <h3>هایستریا۲ — تنظیمات پیشرفته</h3>
     <div class="row"><input id="t-hop" placeholder="بازهٔ هاپ، مثل 20000-30000 یا off" dir="ltr"><button class="act" onclick="featureOp('hysteria2','hop')">اعمال هاپ</button></div>
     <div class="row"><select id="t-obfs"><option value="gecko">Gecko (پیشنهاد پژوهش ۲۰۲۶)</option><option value="salamander">Salamander</option><option value="off">بدون ابهام</option></select><button class="act" onclick="featureOp('hysteria2','obfs')">اعمال ابهام</button></div>
+    <h3>کانفیگ‌های مشتری (دانلود)</h3><div id="c-list"></div>
     <h3>REALITY — اطلاعات اتصال کلاینت</h3>
     <pre id="t-reality"></pre>
     <pre id="t-out"></pre>
@@ -968,7 +999,7 @@ function showApp(){$('login').classList.add('hide');$('app').classList.remove('h
 async function login(){const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:$('pw').value})});if(r.ok)showApp();else $('lmsg').textContent='رمز اشتباه است'}
 async function logout(){await api('/api/logout',{method:'POST',body:'{}'});location.reload()}
 function msg(t){$('msg').textContent=t||''}
-async function refresh(){try{const s=await api('/api/status');
+async function refresh(){loadClients();try{const s=await api('/api/status');
  $('ver').textContent=s.smartdns_version||'';
  const dot=v=>v==='active'?'<span class="ok">فعال</span>':'<span class="bad">'+v+'</span>';
  $('cards').innerHTML=
@@ -1020,6 +1051,7 @@ async function meshPeerDel(n){await api('/api/mesh',{method:'POST',body:JSON.str
 async function act(a){msg('در حال اجرا...');const r=await api('/api/action',{method:'POST',body:JSON.stringify({action:a})});$('out').textContent=r.out||'';msg(r.ok?'انجام شد':'خطا');refresh()}
 async function loadHijack(){const r=await api('/api/hijack');$('h-table').innerHTML=r.rules.map(x=>'<tr><td>'+x.domain+'</td><td>'+x.target+(x.target6?(' + '+x.target6):(x.v6_blocked?' (IPv6 بسته)':''))+'</td><td><button class="ghost" onclick="hijackDel(\''+x.domain+'\')">حذف</button></td></tr>').join('')}
 async function hijackAdd(){const r=await api('/api/hijack',{method:'POST',body:JSON.stringify({domain:$('h-dom').value,target:$('h-tgt').value,target6:$('h-tgt6').value})});msg(r.error||'ذخیره شد');loadHijack();refresh()}
+async function loadClients(){try{const cl=await api('/api/clients');const el=$('c-list');if(!el)return;el.innerHTML='<table>'+(cl.clients||[]).map(c=>'<tr><td>'+c.label+'</td><td>'+(c.exists?('<a href="/api/client-file?name='+c.key+'">دانلود</a>'):('<span class="bad">هنوز ساخته نشده</span>'))+'</td></tr>').join('')+'</table>'}catch(e){}}
 async function featureOp(f,op){const body={feature:f,op:op};if(op==='hop')body.range=$('t-hop').value;if(op==='obfs')body.obfs=$('t-obfs').value;msg('در حال اجرا...');const r=await api('/api/feature',{method:'POST',body:JSON.stringify(body)});const el=$('t-out');if(el)el.textContent=r.out||'';msg(r.ok?'انجام شد':(r.error||'خطا'));refresh()}
 async function pwChange(){const r=await api('/api/password',{method:'POST',body:JSON.stringify({current:$('pw-cur').value,new:$('pw-new').value})});msg(r.ok?'رمز عوض شد':(r.error||'خطا'))}
 async function vpnCreds(op){const body=op==='user'?{op:op,user:$('v-user').value,pass:$('v-pass').value}:{op:op,psk:$('v-psk').value};const r=await api('/api/vpn-creds',{method:'POST',body:JSON.stringify(body)});msg(r.ok?'ذخیره شد':(r.error||'خطا'));refresh()}

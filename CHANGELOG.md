@@ -1,3 +1,18 @@
+## v1.26 — 2026-11-22 (the DNS learns; configs from the panel)
+
+- **Self-learning gaming set**: `ofogh-learn-domains` (daily
+  timer on profiled nodes) mines the resolver log for frequent
+  domains that are in no set yet, resolves them, and keeps the
+  ones whose answers land inside the cod/dc IP ranges — real
+  gaming traffic the static lists missed. They join
+  lists/learned.domains and get the full gaming treatment
+  (edge group, fastest-response, cache warming). The static
+  lists stop being the ceiling on coverage.
+- **Client configs in the panel**: the transports tab now
+  lists every emitted client config (auto, Gecko, Hysteria2,
+  TUIC, AnyTLS, HTTPS proxy, gateway) with a download button —
+  no more fetching /root files by hand.
+
 ## v1.25 — 2026-11-21 (product scope locked: DNS + proxy, no box)
 
 - **Owner's product decision**: no gateway box in the product

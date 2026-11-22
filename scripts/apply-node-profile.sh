@@ -56,6 +56,14 @@ echo "== node profile iran-baku: admin=$ADMIN_IP subnet=$CLIENT_SUBNET server=$S
 
 # --- 1. SmartDNS edge group + floors -------------------------------------
 sed -i 's#^nameserver /domain-set:cod/gaming#nameserver /domain-set:cod/edge#' "$CONF"
+sed -i 's#^nameserver /domain-set:learned/gaming#nameserver /domain-set:learned/edge#' "$CONF"
+grep -q 'domain-set -name learned' "$CONF" || \
+  echo "domain-set -name learned -file $ETC/lists/learned.domains" >> "$CONF"
+grep -q 'domain-rules /domain-set:learned/' "$CONF" || \
+  echo "domain-rules /domain-set:learned/ -speed-check-mode tcp:443 -response-mode fastest-response" >> "$CONF"
+grep -q 'nameserver /domain-set:learned/edge' "$CONF" || \
+  echo "nameserver /domain-set:learned/edge" >> "$CONF"
+touch "$ETC/lists/learned.domains"
 grep -q 'domain-set -name psn' "$CONF" || \
   echo "domain-set -name psn -file $ETC/lists/psn.domains" >> "$CONF"
 grep -q 'domain-rules /domain-set:psn/' "$CONF" || \
@@ -123,7 +131,7 @@ cat > /usr/local/bin/ofogh-warm-all.sh <<'EOF'
 # Warm the whole gaming sets (A + AAAA) so every gaming lookup is
 # a cache hit; serve-expired covers the gaps between runs.
 LISTS=/etc/ofogheamn-dns/lists
-{ cat "$LISTS/gaming.domains" "$LISTS/cod.domains" "$LISTS/psn.domains" 2>/dev/null; } \
+{ cat "$LISTS/gaming.domains" "$LISTS/cod.domains" "$LISTS/psn.domains" "$LISTS/learned.domains" 2>/dev/null; } \
   | grep -vE '^[[:space:]]*(#|$)' | sort -u \
   | xargs -P 8 -I{} sh -c 'dig @127.0.0.1 {} A >/dev/null 2>&1; dig @127.0.0.1 {} AAAA >/dev/null 2>&1'
 EOF
@@ -147,6 +155,27 @@ WantedBy=timers.target
 EOF
 systemctl daemon-reload
 systemctl enable --now ofogh-warm-all.timer >/dev/null 2>&1 || true
+if [ -x /usr/local/bin/ofogh-learn-domains ]; then
+cat > /etc/systemd/system/ofogh-learn.service <<'EOF'
+[Unit]
+Description=Learn gaming domains from the resolver log
+After=ofogheamn-dns.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/ofogh-learn-domains
+EOF
+cat > /etc/systemd/system/ofogh-learn.timer <<'EOF'
+[Unit]
+Description=Run the domain learner daily
+[Timer]
+OnCalendar=daily
+Persistent=true
+[Install]
+WantedBy=timers.target
+EOF
+systemctl daemon-reload
+systemctl enable --now ofogh-learn.timer >/dev/null 2>&1 || true
+fi
 
 # --- 6. Tunnels off + firewall private ------------------------------------
 systemctl disable --now wg-quick@wg0 strongswan xl2tpd ipsec \

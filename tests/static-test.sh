@@ -407,6 +407,12 @@ has panel/panel.py 'hysteria2-gecko'
 chk "panel controls the Gecko rung" $?
 has panel/panel.py 'https-proxy'
 chk "panel controls the HTTPS proxy" $?
+has scripts/ofogh-learn-domains.sh 'ipset test'
+chk "domain learner verifies candidates against the game ranges" $?
+has config/smartdns.conf 'domain-set -name learned'
+chk "template routes the learned set with gaming treatment" $?
+has panel/panel.py '/api/client-file'
+chk "panel serves client config downloads" $?
 has config/smartdns.conf 'domain-set:cod/ -speed-check-mode tcp:443 -response-mode fastest-response'
 chk "cod set answers fastest-response for session setup" $?
 rm -rf "$SD_DIR"

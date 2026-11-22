@@ -114,6 +114,7 @@ cp "$SRC_DIR/config/lists/gaming.domains" "$ETC/lists/gaming.domains"
 cp "$SRC_DIR/config/lists/cod.domains" "$ETC/lists/cod.domains"
 cp "$SRC_DIR/config/lists/psn.domains" "$ETC/lists/psn.domains"
 cp "$SRC_DIR/config/lists/cod-ip-ranges.txt" "$ETC/lists/cod-ip-ranges.txt"
+[ -f "$ETC/lists/learned.domains" ] || cp "$SRC_DIR/config/lists/learned.domains" "$ETC/lists/learned.domains"
 # AppArmor: the project Unbound reads its config from $ETC; the distro
 # profile does not know that path and the recursive unit crash-loops.
 if [ -d /etc/apparmor.d/local ]; then
@@ -125,6 +126,7 @@ install -m 755 "$SRC_DIR/scripts/cod-warmup.sh" /usr/local/bin/cod-warmup
 install -m 755 "$SRC_DIR/scripts/ofogheamn-firewall.sh" /usr/local/bin/ofogheamn-firewall
 install -m 755 "$SRC_DIR/scripts/ofogheamn-qos.sh" /usr/local/bin/ofogheamn-qos
 install -m 755 "$SRC_DIR/scripts/update-dc-ranges.py" /usr/local/bin/update-dc-ranges
+install -m 755 "$SRC_DIR/scripts/ofogh-learn-domains.sh" /usr/local/bin/ofogh-learn-domains
 install -m 755 "$SRC_DIR/scripts/update-blocklist.sh" /usr/local/bin/update-blocklist
 mkdir -p /usr/local/lib/ofogheamn-dns
 [ "$LITE" != "1" ] && install -m 644 "$SRC_DIR/panel/panel.py" /usr/local/lib/ofogheamn-dns/panel.py || true
