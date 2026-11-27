@@ -155,25 +155,52 @@ def is_admin(code):
 CSS = """
 *{box-sizing:border-box}
 body{font-family:Vazirmatn,Tahoma,sans-serif;margin:0;min-height:100vh;color:#e8eef7;
-background:radial-gradient(60rem 40rem at 85% -10%,#155e75 0,transparent 55%),
-radial-gradient(50rem 36rem at 8% 110%,#4c1d95 0,transparent 55%),
+background:
+radial-gradient(60rem 40rem at 85% -10%,rgba(21,94,117,.85) 0,transparent 55%),
+radial-gradient(50rem 36rem at 8% 110%,rgba(76,29,149,.8) 0,transparent 55%),
 linear-gradient(160deg,#0b1220,#0f172a 55%,#111827);
-display:flex;align-items:center;justify-content:center;padding:20px}
-.card{width:100%;max-width:440px;padding:30px 26px;border-radius:24px;
-background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);
-backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
-box-shadow:0 24px 60px rgba(0,0,0,.45);animation:in .5s ease both}
-@keyframes in{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
-.brand{display:flex;align-items:center;gap:10px;color:#7dd3fc;font-weight:700;font-size:15px}
-.brand .dot{width:11px;height:11px;border-radius:50%;background:#22d3ee;
-box-shadow:0 0 14px #22d3ee;animation:pulse 2s infinite}
-@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.35)}}
-h1{font-size:24px;margin:14px 0 6px}
+display:flex;align-items:center;justify-content:center;padding:20px;overflow-x:hidden}
+body:before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.35;
+background-image:linear-gradient(rgba(148,163,184,.06) 1px,transparent 1px),
+linear-gradient(90deg,rgba(148,163,184,.06) 1px,transparent 1px);
+background-size:44px 44px;
+mask-image:radial-gradient(70% 60% at 50% 40%,#000 30%,transparent 100%)}
+.card{position:relative;width:100%;max-width:440px;padding:32px 26px 28px;border-radius:26px;
+background:linear-gradient(180deg,rgba(255,255,255,.09),rgba(255,255,255,.045));
+border:1px solid rgba(255,255,255,.16);
+backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+box-shadow:0 30px 70px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.15);
+animation:in .55s cubic-bezier(.2,.8,.25,1) both}
+.card:before{content:"";position:absolute;inset:-1px;border-radius:26px;padding:1px;
+background:linear-gradient(140deg,rgba(34,211,238,.55),transparent 35%,transparent 65%,rgba(167,139,250,.5));
+-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none}
+@keyframes in{from{opacity:0;transform:translateY(16px) scale(.985)}to{opacity:1;transform:none}}
+.brand{display:flex;align-items:center;gap:11px;color:#e0f2fe;font-weight:800;font-size:16px}
+.brand small{display:block;color:#7dd3fc;font-weight:400;font-size:11px;margin-top:2px}
+.logo{width:42px;height:42px;flex:0 0 42px;border-radius:13px;display:grid;place-items:center;
+background:linear-gradient(145deg,rgba(34,211,238,.25),rgba(2,132,199,.12));
+border:1px solid rgba(34,211,238,.4);box-shadow:0 6px 18px rgba(34,211,238,.25)}
+.pulse{width:8px;height:8px;border-radius:50%;background:#34d399;margin-inline-start:auto;
+box-shadow:0 0 10px #34d399;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.4);opacity:.6}}
+h1{font-size:25px;margin:18px 0 6px}
 .sub{color:#9fb0c7;line-height:2;font-size:14px;margin:0}
-.ipbox{margin:20px 0 6px;padding:16px;border-radius:16px;text-align:center;
-background:rgba(34,211,238,.08);border:1px dashed rgba(34,211,238,.45)}
+.steps{display:flex;gap:8px;margin:18px 0 2px}
+.step{flex:1;display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:12px;
+background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);
+font-size:12px;color:#cbd5e1}
+.step b{width:20px;height:20px;flex:0 0 20px;border-radius:50%;display:grid;place-items:center;
+background:rgba(34,211,238,.18);color:#7dd3fc;font-size:12px}
+.ipbox{margin:16px 0 6px;padding:16px;border-radius:16px;text-align:center;position:relative;
+background:linear-gradient(180deg,rgba(34,211,238,.12),rgba(34,211,238,.05));
+border:1px solid rgba(34,211,238,.4)}
 .ipbox .lbl{font-size:12px;color:#7dd3fc;margin-bottom:6px}
-.ip{font-size:26px;font-weight:800;letter-spacing:1px;direction:ltr;color:#f0f9ff}
+.iprow{display:flex;align-items:center;justify-content:center;gap:10px;direction:ltr}
+.ip{font-size:27px;font-weight:800;letter-spacing:1px;color:#f0f9ff}
+.copy{border:1px solid rgba(125,211,252,.4);background:rgba(2,132,199,.18);color:#bae6fd;
+border-radius:10px;padding:6px 9px;cursor:pointer;font-family:inherit;font-size:12px;transition:.2s}
+.copy:hover{background:rgba(2,132,199,.35)}
 label{display:block;margin:18px 0 8px;font-size:14px;color:#cbd5e1}
 input{width:100%;padding:14px 16px;border-radius:14px;border:1px solid rgba(255,255,255,.18);
 background:rgba(15,23,42,.65);color:#fff;font-size:16px;outline:none;transition:.2s;direction:ltr;text-align:left}
@@ -195,16 +222,49 @@ td.ipc{direction:ltr;text-align:left;font-weight:700;color:#e0f2fe}
 background:rgba(34,197,94,.18);color:#86efac}
 .chip.off{background:rgba(148,163,184,.15);color:#94a3b8}
 a{color:#7dd3fc;text-decoration:none}
+/* ---- motion ---- */
+@keyframes drift{from{transform:translate3d(-2%,-1%,0) scale(1)}to{transform:translate3d(2%,2%,0) scale(1.12)}}
+body::before{animation:drift 26s ease-in-out infinite alternate}
+@keyframes sheen{0%{background-position:200% 0}55%,100%{background-position:-120% 0}}
+.card::before{background:linear-gradient(90deg,#0ea5e9,#22d3ee,#a78bfa,#0ea5e9);
+background-size:220% 100%;animation:sheen 7s ease-in-out infinite}
+@keyframes riseIn{from{opacity:0;transform:translateY(14px) scale(.985)}to{opacity:1;transform:none}}
+.card>*{animation:riseIn .6s cubic-bezier(.22,.9,.3,1.2) both}
+.card>*:nth-child(2){animation-delay:.05s}.card>*:nth-child(3){animation-delay:.1s}
+.card>*:nth-child(4){animation-delay:.15s}.card>*:nth-child(5){animation-delay:.2s}
+.card>*:nth-child(6){animation-delay:.25s}.card>*:nth-child(7){animation-delay:.3s}
+@keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+.logo{animation:floaty 5s ease-in-out infinite}
+button{transition:transform .16s ease,box-shadow .16s ease,filter .16s ease}
+button:hover{transform:translateY(-1px);filter:brightness(1.07)}
+button:active{transform:scale(.975)}
+input{transition:border-color .2s ease,box-shadow .2s ease,background .2s ease}
+@keyframes msgIn{0%{opacity:0;transform:translateY(8px) scale(.97)}60%{transform:translateY(-1px) scale(1.01)}100%{opacity:1;transform:none}}
+.msg{animation:msgIn .45s cubic-bezier(.22,.9,.3,1.25) both}
+.msg b{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;
+border-radius:50%;background:rgba(255,255,255,.18);margin-inline-end:2px}
+@keyframes ipGlow{0%,100%{box-shadow:inset 0 0 0 1px rgba(125,211,252,.12)}50%{box-shadow:inset 0 0 22px rgba(34,211,238,.13)}}
+.ipbox{animation:ipGlow 4.5s ease-in-out infinite}
+.step{transition:transform .2s ease,background .2s ease}
+.step:hover{transform:translateY(-2px)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 """
 
 HEAD = """<!DOCTYPE html>
 <html lang="fa" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>__TITLE__</title>
+<meta name="theme-color" content="#0f172a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ثبت IP افق امن">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='38' fill='%2322d3ee'/></svg>">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css">
 <style>""" + CSS + """</style></head><body><div class="card">
-<div class="brand"><span class="dot"></span> افق امن ایرانیان</div>
+<div class="brand"><span class="logo"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M3 17.5h18" stroke="#7dd3fc" stroke-width="1.8" stroke-linecap="round"/><path d="M6.5 17.5a5.5 5.5 0 0 1 11 0" stroke="#22d3ee" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="17.5" r="2.1" fill="#22d3ee"/><path d="M12 4v3M4.9 7.9l2.1 2.1M19.1 7.9L17 10" stroke="#7dd3fc" stroke-width="1.8" stroke-linecap="round"/></svg></span><span>افق امن ایرانیان<small>سامانهٔ ثبت IP کاربران</small></span><span class="pulse"></span></div>
 """
 
 FOOT = """
@@ -213,20 +273,37 @@ FOOT = """
 
 
 def page_user(ip, msg="", kind="ok"):
-    m = ('<div class="msg %s">%s</div>' % (kind, html.escape(msg))) if msg else ""
+    icon = "✓" if kind == "ok" else "!"
+    m = ('<div class="msg %s"><b>%s</b> %s</div>' % (kind, icon, html.escape(msg))) if msg else ""
     return (HEAD.replace("__TITLE__", "ثبت IP — افق امن ایرانیان")
             + "<h1>ثبت IP شما</h1>"
             + '<p class="sub">هر وقت IP اینترنت‌تان عوض شد، کدتان را بزنید تا دسترسی‌تان بدون وقفه ادامه پیدا کند.</p>'
-            + '<div class="ipbox"><div class="lbl">IP فعلی شما</div><div class="ip">%s</div></div>'
+            + '<div class="steps"><div class="step"><b>۱</b> کدتان را وارد کنید</div>'
+            + '<div class="step"><b>۲</b> دکمهٔ ثبت را بزنید</div></div>'
+            + '<div class="ipbox"><div class="lbl">IP فعلی شما</div>'
+            + '<div class="iprow"><span class="ip" id="myip">%s</span>'
             % html.escape(ip)
-            + '<form method="post" action="/register">'
+            + '<button class="copy" type="button" onclick="cp(this)">کپی</button></div></div>'
+            + '<form method="post" action="/register" onsubmit="this.querySelector(\'button\').textContent=\'در حال ثبت…\'">'
             + '<label for="code">کد ثبت شما</label>'
             + '<input id="code" name="code" placeholder="saman_ghannadzadeh" autocomplete="off" required>'
             + '<button type="submit">ثبت این IP</button></form>'
             + '<form method="post" action="/status">'
             + '<input type="hidden" name="code" id="code2">'
             + '<button class="ghost" type="submit" onclick="document.getElementById(\'code2\').value=document.getElementById(\'code\').value">وضعیت کد من</button></form>'
-            + m + FOOT)
+            + m
+            + '<button class="ghost" type="button" id="installBtn" style="display:none">افزودن به صفحهٔ اصلی</button>'
+            + '<div class="msg" id="iosHint" style="display:none">برای افزودن به صفحهٔ اصلی: دکمهٔ اشتراک‌گذاری (Share) را بزنید و «Add to Home Screen» را انتخاب کنید.</div>'
+            + '<script>function cp(b){var t=document.getElementById("myip").textContent;'
+            + 'if(navigator.clipboard){navigator.clipboard.writeText(t)}'
+            + 'b.textContent="کپی شد";setTimeout(function(){b.textContent="کپی"},1600)}'
+            + 'var dp=null,ib=document.getElementById("installBtn");'
+            + 'window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();dp=e;ib.style.display="block"});'
+            + 'ib.addEventListener("click",function(){if(dp){dp.prompt();dp.userChoice.then(function(){dp=null;ib.style.display="none"})}else{document.getElementById("iosHint").style.display="block"}});'
+            + 'var ios=/iphone|ipad|ipod/i.test(navigator.userAgent)&&!window.MSStream;'
+            + 'var standalone=window.matchMedia("(display-mode: standalone)").matches||window.navigator.standalone;'
+            + 'if(ios&&!standalone){ib.style.display="block"}</script>'
+            + FOOT)
 
 
 def page_status(ip, st, visitor_ip):
@@ -289,6 +366,49 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/favicon.ico":
             self.send_response(204)
             self.end_headers()
+            return
+        if self.path == "/manifest.webmanifest":
+            manifest = {
+                "name": "افق امن ایرانیان — ثبت IP",
+                "short_name": "ثبت IP افق امن",
+                "start_url": "/",
+                "scope": "/",
+                "display": "standalone",
+                "dir": "rtl",
+                "lang": "fa",
+                "background_color": "#0f172a",
+                "theme_color": "#0f172a",
+                "icons": [
+                    {"src": "/icon-192.png", "sizes": "192x192", "type": "image/png"},
+                    {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png"},
+                    {"src": "/icon-maskable-512.png", "sizes": "512x512",
+                     "type": "image/png", "purpose": "maskable"},
+                ],
+            }
+            data = json.dumps(manifest, ensure_ascii=False).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/manifest+json")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return
+        if self.path in ("/icon-192.png", "/icon-512.png",
+                         "/icon-maskable-512.png", "/apple-touch-icon.png"):
+            fpath = os.path.join("/usr/local/share/ofogh-ipreg",
+                                 os.path.basename(self.path))
+            try:
+                with open(fpath, "rb") as f:
+                    data = f.read()
+            except OSError:
+                self.send_response(404)
+                self.end_headers()
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "image/png")
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "public, max-age=86400")
+            self.end_headers()
+            self.wfile.write(data)
             return
         if self.path == "/admin":
             self._send(page_admin(""))

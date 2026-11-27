@@ -1,3 +1,44 @@
+## v1.44 — 2026-11-27 (all-platform client kit + Telegram admin bot)
+
+Launch readiness across every client platform. The repo now
+ships a `clients/` kit generated from the reference node's
+real parameters, with an honest per-platform matrix:
+
+- consoles (PS5 / Xbox / Switch): manual DNS, both fields set
+  to the node — ready today
+- Windows: `Set-OfoghDns.ps1` sets the node on all active
+  adapters (with `-Restore` back to DHCP); the DoH variant is
+  included, commented, and activates with the domain below
+- Android: the sing-box ladder app config (ready today);
+  system Private DNS (DoT by hostname) documented and ready
+  the moment the domain lands
+- iOS: a ready-to-install DoH `.mobileconfig` that also pins
+  the node's own CA — it activates as soon as the name below
+  resolves publicly
+- Linux: systemd-resolved drop-in for plain DNS today, plus
+  DoT today via the shipped node CA (`clients/linux/ofogh-ca.pem`)
+
+Named blocker, verified against public resolvers: the name
+`dns.ofogheamn.ir` does not exist in public DNS yet (NXDOMAIN
+at both Cloudflare and Google) and the node certificate is
+self-signed. One A record (`dns.ofogheamn.ir -> node IP`)
+unlocks a public Let's Encrypt certificate, after which the
+Android / iOS / Windows encrypted paths above go live with
+no client changes.
+
+Also new: a Telegram admin bot (`ofogh-telegram-bot.service`)
+running on the node — server uptime and service status, the
+IP-registration admin panel (list users, create/revoke codes,
+view the firewall allowlist), per-section back buttons, an
+access-request flow where each requester writes their name
+and chosen username for the admin to approve or reject in
+chat, and Telegram premium (custom) emoji in its replies,
+including a learn-from-the-admin mode for new premium emoji.
+The registration panel gained motion design (drifting aurora,
+sheen, springy entrances) with `prefers-reduced-motion`
+respected, and an installable PWA manifest with custom icons
+("add to home screen").
+
 ## v1.43 — 2026-11-27 (self-service IP registration panel)
 
 Private mode gates the node by allowlist, which breaks for

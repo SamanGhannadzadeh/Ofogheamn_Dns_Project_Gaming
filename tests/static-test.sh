@@ -697,5 +697,14 @@ chk "QUIC inbounds (hy2, gecko, tuic) get a 300s idle timeout" $?
 chk "every ladder inbound keeps UDP sessions for 10 minutes" $?
 [ "$(grep -c '"tcp_fast_open": True' scripts/gen-singbox-config.py)" -ge 5 ]
 chk "TCP fast open is set on every TCP inbound" $?
+echo "== v1.44: all-platform client kit + telegram bot =="
+[ -f clients/README.md ] && [ -f clients/console/README.md ] && [ -f clients/android/README.md ] && [ -f clients/ios/README.md ] && [ -f clients/linux/README.md ]
+chk "client kit covers console, windows, android, ios, linux" $?
+python3 -c "import plistlib; d = plistlib.load(open('clients/ios/OfoghDns.mobileconfig','rb')); assert d['PayloadDisplayName'].startswith('Ofogh')"
+chk "iOS DoH mobileconfig is a valid plist" $?
+grep -q '180.149.45.237' clients/windows/Set-OfoghDns.ps1 && grep -q 'Restore' clients/windows/Set-OfoghDns.ps1 && grep -q 'BEGIN CERTIFICATE' clients/linux/ofogh-ca.pem
+chk "windows setter targets the node with a restore path; node CA ships" $?
+[ -f scripts/ofogh-telegram-bot.py ] && grep -q 'custom_emoji' scripts/ofogh-telegram-bot.py && grep -q 'bot-admins' scripts/ofogh-telegram-bot.py
+chk "telegram admin bot ships with premium emoji + admin gating" $?
 rm -rf "$SD_DIR"
 exit $fail
