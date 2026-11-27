@@ -1,3 +1,28 @@
+## v1.45 — 2026-11-27 (real public name + Let's Encrypt: encrypted DNS on every platform)
+
+The v1.44 blocker is closed. The node now has a real public
+name, `ofogheamn.duckdns.org` (pointed at the node by the
+operator), and a publicly trusted Let's Encrypt certificate
+(issued via certbot standalone; `scripts/ofogh-letsencrypt.sh`
+plus a deploy hook keep SmartDNS's TLS directory synced and
+the service restarted on every renewal; the old self-signed
+pair is backed up on the node). Verified end-to-end with full
+chain validation: DoT answers with `Verify return code: 0`,
+and DoH returns 200 without any `-k`.
+
+With a real name and a public certificate, the encrypted
+system paths go live with no client-side trust hacks:
+
+- Android Private DNS: `ofogheamn.duckdns.org` — ready
+- iOS: the `.mobileconfig` is regenerated without the
+  self-signed CA payload; ServerURL is the duckdns name
+- Windows: `Set-OfoghDns.ps1` now registers the DoH template
+  for real (`netsh dns add encryption ... autoupgrade=yes`)
+- Linux: DoT no longer needs the node CA (the shipped
+  `ofogh-ca.pem` is removed from the kit)
+
+The client-kit matrix is now all green.
+
 ## v1.44 — 2026-11-27 (all-platform client kit + Telegram admin bot)
 
 Launch readiness across every client platform. The repo now

@@ -10,7 +10,7 @@
 				<key>DNSProtocol</key>
 				<string>HTTPS</string>
 				<key>ServerURL</key>
-				<string>https://dns.ofogheamn.ir/dns-query</string>
+				<string>https://ofogheamn.duckdns.org/dns-query</string>
 			</dict>
 			<key>OnDemandRules</key>
 			<array>
@@ -26,52 +26,13 @@
 			<key>PayloadType</key>
 			<string>com.apple.dnsSettings.managed</string>
 			<key>PayloadUUID</key>
-			<string>2FEC5989-8961-440B-9B39-1AB0D1BC439C</string>
-			<key>PayloadVersion</key>
-			<integer>1</integer>
-		</dict>
-		<dict>
-			<key>PayloadCertificateFileName</key>
-			<string>ofogh-ca.cer</string>
-			<key>PayloadContent</key>
-			<data>
-			MIIDNDCCAhygAwIBAgIUNc7msbyWvuQQLr5Ho94QpCP9LiYwDQYJ
-			KoZIhvcNAQELBQAwGzEZMBcGA1UEAwwQZG5zLm9mb2doZWFtbi5p
-			cjAeFw0yNjExMjIxNzQ4NTdaFw0yOTAyMjQxNzQ4NTdaMBsxGTAX
-			BgNVBAMMEGRucy5vZm9naGVhbW4uaXIwggEiMA0GCSqGSIb3DQEB
-			AQUAA4IBDwAwggEKAoIBAQDW2MwdxwjxNWauUTCkYuh3V0UPo2y5
-			cxrHi9hVsM+KnVJRegwHGSL+8B8opBwLYrnyLPiaSNGoY+KsrP91
-			c6aQBS/v212OruBMBThkOiagx7No1uBhhG+usyHCJnm2KHTagE6r
-			E4IrxKtQxLLp4kSRwSD5ZcWaFygb0MPuk1Tcro1CEBSLMP6XYWCn
-			TCs91fcE455UlAFY+gCrr55KPNyESXo9vlwJ5DZWsVavovlQBVsM
-			M5wzHd/byWxZPzZJ269lAAWVubtTkV8D3n9g+YYDdDfLKzqTVArz
-			h9YNiI+mQykmZH+zjYgEnPn6H2STmzpDPifPhXDpxukhu0H17/kn
-			AgMBAAGjcDBuMB0GA1UdDgQWBBSy3cY4wEKt4uYldqd1z53YxPwX
-			NDAfBgNVHSMEGDAWgBSy3cY4wEKt4uYldqd1z53YxPwXNDAPBgNV
-			HRMBAf8EBTADAQH/MBsGA1UdEQQUMBKCEGRucy5vZm9naGVhbW4u
-			aXIwDQYJKoZIhvcNAQELBQADggEBAFtSFKlmBciaaRx/oeTp0oQo
-			3/Y8P782dPTqSLObKV15IA0jleaaZ6seqEILvkOtZY0+k1OYcD+g
-			gUBtEr2Ixx0GnrZJxPsuqF3TLcpipaAh1EqdBZCxbUg4XYjvWlpl
-			oE4bNsSAvz+CFZWhJotDjHxk04AM7gpoRj7Pvfgy83m8pmbLrPQp
-			SaBi+N0a3oBNQx3JJE5Dsm3k5cYNFsjggYk9euHEoUaoIP8sLrQ+
-			aFoVGoDBBL4BuMym+txoAziZM6ejYmOl2eDNa+crnpcLd2h74jJc
-			KVNZ/giimETTIUInyzZxlp039Pe6fSYS7+6FyPeYJdX0m9u80/Ee
-			c7LmpRw=
-			</data>
-			<key>PayloadDisplayName</key>
-			<string>Ofogh Amn Node CA</string>
-			<key>PayloadIdentifier</key>
-			<string>ir.ofogheamn.dns.ca</string>
-			<key>PayloadType</key>
-			<string>com.apple.security.root</string>
-			<key>PayloadUUID</key>
-			<string>B17597F6-3A16-4D75-A84D-B4A8FC8B028E</string>
+			<string>7CF9BEC1-3372-4A60-B2AB-921C63AEB73A</string>
 			<key>PayloadVersion</key>
 			<integer>1</integer>
 		</dict>
 	</array>
 	<key>PayloadDescription</key>
-	<string>Encrypted DNS (DoH) to the Ofogh Amn node, with the node CA pinned.</string>
+	<string>Encrypted DNS (DoH) to the Ofogh Amn node.</string>
 	<key>PayloadDisplayName</key>
 	<string>Ofogh Amn DNS (DoH)</string>
 	<key>PayloadIdentifier</key>
@@ -81,7 +42,7 @@
 	<key>PayloadType</key>
 	<string>Configuration</string>
 	<key>PayloadUUID</key>
-	<string>15D72FCE-A0B7-465F-9747-07D799F21B85</string>
+	<string>D1D078A7-0B3D-4414-92F8-CAFDCAE3D18A</string>
 	<key>PayloadVersion</key>
 	<integer>1</integer>
 </dict>

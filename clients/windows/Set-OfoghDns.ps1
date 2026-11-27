@@ -21,8 +21,11 @@ foreach ($a in $adapters) {
     }
 }
 Clear-DnsClientCache
-Write-Host "Done."
 
-# Encrypted DNS (DoH), enabled automatically once dns.ofogheamn.ir is
-# publicly registered and the node carries a public certificate:
-#   netsh dns add encryption server=$Node template=https://dns.ofogheamn.ir/dns-query autoupgrade=yes udpfallback=no
+if (-not $Restore) {
+    # Encrypted DNS (DoH) — the node name is public and its certificate
+    # is publicly trusted, so Windows accepts the template directly.
+    netsh dns add encryption server=$Node template=https://ofogheamn.duckdns.org/dns-query autoupgrade=yes udpfallback=no | Out-Null
+    Write-Host "DoH template registered for $Node"
+}
+Write-Host "Done."
