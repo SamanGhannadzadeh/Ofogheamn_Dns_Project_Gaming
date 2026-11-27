@@ -3,7 +3,7 @@
 ## پروفایل DoH آماده: `OfoghDns.mobileconfig`
 
 پروفایل، DNS رمزنگاری‌شده (DoH) به
-`https://ofogheamn.duckdns.org/dns-query` را روی کل سیستم فعال می‌کند.
+`https://ofogheamn.mytunnel.org/dns-query` را روی کل سیستم فعال می‌کند.
 گواهی نود عمومی و معتبر است و پروفایل به گواهی اضافه‌ای نیاز ندارد.
 
 نصب: فایل را در آیفون باز کنید ← Settings ← Profile Downloaded ← Install.

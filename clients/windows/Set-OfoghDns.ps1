@@ -25,7 +25,7 @@ Clear-DnsClientCache
 if (-not $Restore) {
     # Encrypted DNS (DoH) — the node name is public and its certificate
     # is publicly trusted, so Windows accepts the template directly.
-    netsh dns add encryption server=$Node template=https://ofogheamn.duckdns.org/dns-query autoupgrade=yes udpfallback=no | Out-Null
+    netsh dns add encryption server=$Node template=https://ofogheamn.mytunnel.org/dns-query autoupgrade=yes udpfallback=no | Out-Null
     Write-Host "DoH template registered for $Node"
 }
 Write-Host "Done."

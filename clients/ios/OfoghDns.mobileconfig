@@ -10,7 +10,7 @@
 				<key>DNSProtocol</key>
 				<string>HTTPS</string>
 				<key>ServerURL</key>
-				<string>https://ofogheamn.duckdns.org/dns-query</string>
+				<string>https://ofogheamn.mytunnel.org/dns-query</string>
 			</dict>
 			<key>OnDemandRules</key>
 			<array>
@@ -26,7 +26,7 @@
 			<key>PayloadType</key>
 			<string>com.apple.dnsSettings.managed</string>
 			<key>PayloadUUID</key>
-			<string>7CF9BEC1-3372-4A60-B2AB-921C63AEB73A</string>
+			<string>013E549F-4B01-4B3F-BA88-2E463C8F5B04</string>
 			<key>PayloadVersion</key>
 			<integer>1</integer>
 		</dict>
@@ -42,7 +42,7 @@
 	<key>PayloadType</key>
 	<string>Configuration</string>
 	<key>PayloadUUID</key>
-	<string>D1D078A7-0B3D-4414-92F8-CAFDCAE3D18A</string>
+	<string>964E5721-CA1C-4C2F-B84F-82919051A909</string>
 	<key>PayloadVersion</key>
 	<integer>1</integer>
 </dict>

@@ -1,9 +1,9 @@
 #!/bin/bash
-# Issue a Let's Encrypt cert for ofogheamn.duckdns.org and wire it into
+# Issue a Let's Encrypt cert for ofogheamn.mytunnel.org and wire it into
 # the node's SmartDNS TLS (DoT/DoH), with a renewal deploy hook.
 set -x
 export DEBIAN_FRONTEND=noninteractive
-DOMAIN=${1:-ofogheamn.duckdns.org}
+DOMAIN=${1:-ofogheamn.mytunnel.org}
 TLS_DIR=/etc/ofogheamn-dns/tls
 
 if ss -tlnp 2>/dev/null | grep -q ':80 '; then
@@ -20,7 +20,7 @@ mkdir -p /etc/letsencrypt/renewal-hooks/deploy
 cat > /usr/local/bin/ofogh-cert-sync.sh <<'EOS'
 #!/bin/bash
 # Copy the LE cert into SmartDNS's TLS dir and restart the DNS service.
-DOMAIN=${1:-ofogheamn.duckdns.org}
+DOMAIN=${1:-ofogheamn.mytunnel.org}
 TLS_DIR=/etc/ofogheamn-dns/tls
 cp "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" "$TLS_DIR/fullchain.pem"
 cp "/etc/letsencrypt/live/$DOMAIN/privkey.pem" "$TLS_DIR/privkey.pem"

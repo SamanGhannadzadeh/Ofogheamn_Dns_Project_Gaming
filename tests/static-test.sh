@@ -707,10 +707,10 @@ chk "windows setter targets the node with a restore path" $?
 [ -f scripts/ofogh-telegram-bot.py ] && grep -q 'custom_emoji' scripts/ofogh-telegram-bot.py && grep -q 'bot-admins' scripts/ofogh-telegram-bot.py
 chk "telegram admin bot ships with premium emoji + admin gating" $?
 echo "== v1.45: real public name + letsencrypt =="
-grep -rq 'ofogheamn.duckdns.org' clients/ && ! grep -rq 'ofogheamn.ir' clients/
-chk "client kit uses the real duckdns name, invented name is gone" $?
-python3 -c "import plistlib; d = plistlib.load(open('clients/ios/OfoghDns.mobileconfig','rb')); s = str(d); assert 'duckdns' in s and 'security.root' not in s"
-chk "iOS profile targets duckdns DoH with no CA payload" $?
+grep -rq 'ofogheamn.mytunnel.org' clients/ && ! grep -rq 'ofogheamn.ir' clients/ && ! grep -rq 'duckdns' clients/
+chk "client kit uses the mytunnel name; invented and poisoned names are gone" $?
+python3 -c "import plistlib; d = plistlib.load(open('clients/ios/OfoghDns.mobileconfig','rb')); s = str(d); assert 'mytunnel' in s and 'security.root' not in s"
+chk "iOS profile targets mytunnel DoH with no CA payload" $?
 [ -f scripts/ofogh-letsencrypt.sh ] && grep -q 'renewal-hooks' scripts/ofogh-letsencrypt.sh
 chk "letsencrypt issuance + renewal sync script ships" $?
 rm -rf "$SD_DIR"

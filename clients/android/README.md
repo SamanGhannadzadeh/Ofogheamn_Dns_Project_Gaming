@@ -6,7 +6,7 @@ Settings ← Network & internet ← Private DNS ←
 Private DNS provider hostname:
 
 ```
-ofogheamn.duckdns.org
+ofogheamn.mytunnel.org
 ```
 
 تمام. DNS کل گوشی رمزنگاری‌شده (DoT) از نود رد می‌شود و گواهی نود

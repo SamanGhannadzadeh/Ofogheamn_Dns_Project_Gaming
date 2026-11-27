@@ -1,3 +1,27 @@
+## v1.46 — 2026-11-27 (the name moves to mytunnel.org: duckdns is poisoned inside Iran)
+
+Field diagnosis, proven with captures: the v1.45 name worked
+everywhere except from inside Iran. Iranian resolvers poison
+`duckdns.org`: check-host nodes in Tehran/Isfahan return the
+filtering sinkhole (10.10.34.36) for the name while Frankfurt
+returns the node, so Android Private DNS never reached the
+node at all (an on-node tcpdump of port 853 during a toggle
+stayed empty). Nothing server-side can fix a poisoned name.
+
+The operator moved the node to `ofogheamn.mytunnel.org`,
+verified clean from three Iranian check-host nodes plus the
+public resolvers before anything was rebuilt on it. A fresh
+Let's Encrypt certificate for the new name is issued and
+synced into SmartDNS (the sync hook now tracks this name;
+the duckdns certificate remains in letsencrypt, unused), and
+the full verification battery passes again: DoT
+`Verify return code: 0`, DoH 200 without `-k`. The client
+kit is re-pointed at the new name throughout (Private DNS
+hostname, iOS profile ServerURL, Windows DoH template, Linux
+DoT name). Suffix survey for the record: ddns.net, hopto.org
+and zapto.org are poisoned the same way; dynu.net and
+dnsexit.com answered clean from Iran.
+
 ## v1.45 — 2026-11-27 (real public name + Let's Encrypt: encrypted DNS on every platform)
 
 The v1.44 blocker is closed. The node now has a real public
