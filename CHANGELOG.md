@@ -1,3 +1,29 @@
+## v1.47 — 2026-11-27 (measured tuning pass: prune slow upstreams, refresh edge pins)
+
+A full node audit and re-benchmark, applied live on the Baku
+node. Upstream medians over 15 queries each from the node:
+Gcore 2.56.220.2 = 2 ms, Cloudflare 1.1.1.1/1.0.0.1 = 3 ms,
+Gcore 95.85.95.85 = 4 ms — but Google 8.8.8.8 = 47 ms and
+Quad9 9.9.9.9 = 74 ms. The new operator tool
+`scripts/ofogh-prune-upstreams.sh` removes the slow members
+from the edge and default groups (the gaming group is left
+alone by design); defaults in the shipped templates are
+unchanged, this is a per-egress measured action. After the
+prune: cold answers NOERROR, warm answers 1 ms, zero
+SERVFAIL.
+
+Edge pins re-measured by full TLS handshake from the node
+(the shipped `edge-pins` flow; pins stay node-local state).
+Two pins moved after the candidate presented Sony's real
+certificate for the name: ps5.np.playstation.net
+2.20.45.85 → 2.20.45.91 (handshake 114 → 97 ms) and
+envelope2.np.dl.playstation.net 184.26.5.22 → 23.46.118.101
+(164 → 133 ms). fjp01 (PS5 update) re-measured against all
+four known edges: the existing pin 92.122.16.167 is still
+the fastest. The other eight pins re-measured as already
+optimal; two candidates within noise (sgst 4 ms,
+titlestore-preview 2 ms) were deliberately not chased.
+
 ## v1.46 — 2026-11-27 (the name moves to mytunnel.org: duckdns is poisoned inside Iran)
 
 Field diagnosis, proven with captures: the v1.45 name worked
