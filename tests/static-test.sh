@@ -707,7 +707,7 @@ chk "windows setter targets the node with a restore path" $?
 [ -f scripts/ofogh-telegram-bot.py ] && grep -q 'custom_emoji' scripts/ofogh-telegram-bot.py && grep -q 'bot-admins' scripts/ofogh-telegram-bot.py
 chk "telegram admin bot ships with premium emoji + admin gating" $?
 echo "== v1.47: upstream prune tool =="
-test -f scripts/ofogh-prune-upstreams.sh && grep -q '8\.8\.8\.8' scripts/ofogh-prune-upstreams.sh && grep -q 'group edge' scripts/ofogh-prune-upstreams.sh
+test -f scripts/ofogh-prune-upstreams.sh && grep -qF '8\.8\.8\.8' scripts/ofogh-prune-upstreams.sh && grep -q 'group edge' scripts/ofogh-prune-upstreams.sh
 chk "prune tool ships and targets the slow edge/default members" $?
 
 echo "== v1.45: real public name + letsencrypt =="
