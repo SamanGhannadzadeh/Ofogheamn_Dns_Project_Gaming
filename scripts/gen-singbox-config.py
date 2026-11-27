@@ -133,6 +133,7 @@ def main() -> int:
             "bbr_profile": h.get("bbr_profile", "conservative"),
             "tls": {
                 "enabled": True,
+                "alpn": ["h3"],
                 "certificate_path": os.path.join(ETC, "tls", "fullchain.pem"),
                 "key_path": os.path.join(ETC, "tls", "privkey.pem"),
             },
@@ -178,6 +179,7 @@ def main() -> int:
                      "max_packet_size": int(g.get("max_packet_size", 1200))},
             "tls": {
                 "enabled": True,
+                "alpn": ["h3"],
                 "certificate_path": os.path.join(ETC, "tls", "fullchain.pem"),
                 "key_path": os.path.join(ETC, "tls", "privkey.pem"),
             },
@@ -203,6 +205,7 @@ def main() -> int:
             "zero_rtt_handshake": False,
             "tls": {
                 "enabled": True,
+                "alpn": ["h3"],
                 "certificate_path": os.path.join(ETC, "tls", "fullchain.pem"),
                 "key_path": os.path.join(ETC, "tls", "privkey.pem"),
             },

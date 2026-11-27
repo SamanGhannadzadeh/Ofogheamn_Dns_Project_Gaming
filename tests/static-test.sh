@@ -29,7 +29,8 @@ chk "sh -n platforms/openwrt/install-openwrt.sh" $?
 for f in panel/panel.py scripts/gen-singbox-config.py \
          scripts/ofogheamn-wg-peer.py scripts/ofogheamn-mesh.py \
          scripts/ofogheamn-region.py scripts/ofogheamn-bench.py \
-         scripts/ofogheamn-health.py docker/verify-download.py; do
+         scripts/ofogheamn-health.py docker/verify-download.py \
+         scripts/ofogh-sni-relay.py scripts/ofogh-mm-relay.py; do
   python3 -m py_compile "$f" 2>/dev/null; chk "py_compile $f" $?
 done
 
@@ -454,5 +455,33 @@ has install.sh 'fortnite.domains'
 chk "installer ships the new game lists" $?
 has config/smartdns.conf 'domain-set:cod/ -speed-check-mode tcp:443 -response-mode fastest-response'
 chk "cod set answers fastest-response for session setup" $?
+
+echo "== v1.31 live-node lessons =="
+hasnot config/smartdns.conf 'bind-tls \[::\]:853 -group'
+chk "DoT bind is not group-locked (non-gaming names must not SERVFAIL)" $?
+hasnot config/smartdns.conf 'bind-https \[::\]:443 -group'
+chk "DoH bind is not group-locked" $?
+has config/smartdns.conf 'server-tls 2606:4700:4700::1111 -group gaming'
+chk "gaming group uses the benchmark-winning upstreams" $?
+has scripts/ofogheamn-firewall.sh 'panel 8080 + proxy 2080: allowlist only'
+chk "firewall chains panel + mixed proxy in private mode" $?
+has scripts/ofogheamn-firewall.sh '\-i wg0 -j RETURN'
+chk "private chain passes the project's WireGuard clients" $?
+has scripts/ofogheamn-firewall.sh 'mm-relay.json'
+chk "firewall guards the matchmaking relay port" $?
+has scripts/gen-singbox-config.py '"alpn": \["h3"\]'
+chk "QUIC inbounds send ALPN h3 (sing-box 1.14)" $?
+has scripts/apply-node-profile.sh 'server_ports'
+chk "client profile uses 1.14 server_ports hopping" $?
+has scripts/apply-node-profile.sh '"server_port": 53'
+chk "client DNS outbound carries server_port (1.14)" $?
+has install.sh 'ofogh-sni-relay.py'
+chk "installer ships the SNI relay" $?
+has install.sh 'ofogh-mm-relay.py'
+chk "installer ships the matchmaking relay" $?
+has scripts/ofogheamn-dns 'sni-relay)'
+chk "CLI exposes the sni-relay command" $?
+has scripts/ofogheamn-dns 'mm-relay)'
+chk "CLI exposes the mm-relay command" $?
 rm -rf "$SD_DIR"
 exit $fail

@@ -5,9 +5,10 @@
 # A dedicated chain OFOGH_DNS_IN guards the DNS ports (53, 853, 443)
 # on INPUT. Public mode = chain empty (world may query).
 # Private mode = only allowlisted sources + localhost pass; the
-# rest is dropped. The panel (8080) and the proxy (2080) are NOT
-# touched here: the panel has its own login, the proxy its users.
-# Exception: the optional no-auth CONSOLE proxy port (console.json)
+# rest is dropped. The panel (8080) and the mixed proxy (2080)
+# are guarded below as well (v1.31): the proxy can run with an
+# empty user list, which made it an open proxy even in private
+# mode on a live node. The optional no-auth CONSOLE proxy port (console.json)
 # has no login to protect it, so this script guards it — allowlist
 # chain in private mode, hard DROP in public mode.
 set -u
@@ -45,6 +46,10 @@ fi
 
 if [ "$MODE" = "private" ]; then
   iptables -A "$CHAIN" -i lo -j RETURN
+  # Tunnel clients (the project's own WireGuard) are already
+  # authenticated by their keys; their traffic must reach the
+  # services (v1.31 — without this, private mode dropped them).
+  iptables -A "$CHAIN" -i wg0 -j RETURN
   if [ -r "$ETC/allowlist.txt" ]; then
     while read -r net; do
       case "$net" in ''|\#*) continue ;; esac
@@ -137,6 +142,49 @@ for spec in "tuic.json udp TUIC" "anytls.json tcp AnyTLS" "hysteria2-gecko.json 
     fi
   fi
 done
+
+# Panel (8080) + mixed proxy (2080): in private mode both go
+# through the allowlist chain like every other service (v1.31;
+# a user-less 2080 was abused as an open proxy on a live node
+# even in private mode). In public mode the panel stays as-is
+# (it has its own login), while a user-less 2080 is dropped
+# outright, exactly like the no-auth console port.
+if [ "$MODE" = "private" ]; then
+  iptables -C INPUT -p tcp --dport 8080 -j "$CHAIN" 2>/dev/null \
+    || iptables -I INPUT 1 -p tcp --dport 8080 -j "$CHAIN"
+  for proto in udp tcp; do
+    iptables -C INPUT -p "$proto" --dport 2080 -j "$CHAIN" 2>/dev/null \
+      || iptables -I INPUT 1 -p "$proto" --dport 2080 -j "$CHAIN"
+  done
+  echo "panel 8080 + proxy 2080: allowlist only (private)"
+else
+  if ! python3 -c "import json,sys; u=json.load(open('$ETC/proxy-users.json')); sys.exit(0 if u else 1)" 2>/dev/null; then
+    for proto in udp tcp; do
+      iptables -C INPUT -p "$proto" --dport 2080 -j DROP 2>/dev/null \
+        || iptables -I INPUT 1 -p "$proto" --dport 2080 -j DROP
+    done
+    echo "proxy 2080: blocked (public mode, no proxy users configured)"
+  fi
+fi
+
+# Matchmaking relay (opt-in, no auth of its own — see
+# ofogh-mm-relay.py): same rule as the console port. Private
+# mode routes it through the allowlist chain; public mode
+# drops it — an open TCP relay must never be world-reachable.
+if [ -r "$ETC/mm-relay.json" ]; then
+  MMPORT="$(python3 -c "import json;print(json.load(open('$ETC/mm-relay.json'))['port'])" 2>/dev/null || true)"
+  if [ -n "$MMPORT" ]; then
+    if [ "$MODE" = "private" ]; then
+      iptables -C INPUT -p tcp --dport "$MMPORT" -j "$CHAIN" 2>/dev/null \
+        || iptables -I INPUT 1 -p tcp --dport "$MMPORT" -j "$CHAIN"
+      echo "mm-relay port $MMPORT: allowlist only (private)"
+    else
+      iptables -C INPUT -p tcp --dport "$MMPORT" -j DROP 2>/dev/null \
+        || iptables -I INPUT 1 -p tcp --dport "$MMPORT" -j DROP
+      echo "mm-relay port $MMPORT: blocked (public mode)"
+    fi
+  fi
+fi
 
 # VPN servers (L2TP/IPsec + PPTP): accept the tunnel ports on INPUT.
 # Idempotent. UDP 1701 is only ever useful inside IPsec (the PSK

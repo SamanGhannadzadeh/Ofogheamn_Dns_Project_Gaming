@@ -1,3 +1,50 @@
+## v1.31 — 2026-11-27 (live-node lessons: open-proxy fix, SERVFAIL fix, 1.14 formats, transparent relays)
+
+Every item in this release was found or proven on a live node
+(Baku, 2026-11-26) and fixed there first; this release ports the
+lessons back into the project.
+
+- **Security: the mixed proxy (2080) could be an open proxy.**
+  The firewall deliberately left 2080/8080 alone ("the proxy has
+  its users") — but the shipped mixed proxy can run with an
+  EMPTY user list, and a stranger relayed through a live node's
+  2080 even in private mode. The firewall now chains 2080
+  (tcp+udp) and the panel (8080) through the allowlist in
+  private mode, and drops a user-less 2080 outright in public
+  mode, exactly like the no-auth console port.
+- **Private mode dropped the project's own WireGuard clients.**
+  The allowlist chain had lo + allowlist only; wg0 traffic now
+  RETURNs (tunnel peers are authenticated by their keys).
+- **DoT/DoH SERVFAILed every non-gaming name.** The 853/443
+  binds carried `-group gaming`, and the gaming group's
+  exclude-default upstreams left ordinary names with no path
+  (rtcode 2 in ~1 ms). The binds no longer carry the group;
+  gaming/edge treatment comes from the domain rules, which key
+  on the name, not the arrival port — verified live both ways.
+- **Upstreams re-based on a 39-resolver benchmark** measured
+  from the node: Cloudflare 1-2 ms (now the gaming group:
+  1.1.1.1, 1.0.0.1, v6 ::1111 over DoT + Google DoT), then a
+  cliff (Google plain 44 ms, Quad9 56-68 ms — both pruned).
+  The default group keeps Cloudflare in every protocol plus
+  the host network's own resolvers (Gcore public DNS, 1 ms).
+- **sing-box 1.14 formats, everywhere.** Server generator: the
+  Hysteria2, Gecko and TUIC inbounds now send ALPN `h3` (TUIC
+  refused clients without it: "server did not select an ALPN
+  protocol"). Client profile generator: DNS outbounds carry
+  `server_port: 53`; Hysteria2 hopping uses `server_ports`
+  (colon ranges) + a single `hop_interval`, replacing the
+  removed `hop_ports`/`hop_interval_max` pair.
+- **New opt-in transparent relays** (docs/TRANSPARENT-RELAYS.fa.md):
+  an SNI router for TCP/443 that forwards configured licensing
+  hosts (default suffix embodyvr.io — fixes Call of Duty's
+  Enhanced Audio NET03 geo-block) to their REAL servers with
+  TLS end-to-end, while DoH moves to a loopback listener behind
+  the same port; and a fixed-destination relay for the
+  Demonware matchmaking gateway (TCP/3074). Both are enabled
+  per name with the existing add-hijack rule — never blanket.
+  Measured honestly: matchmaking ping 87 -> 93 ms, better
+  lobbies; the reference operator kept it for the lobbies.
+
 ## v1.30 — 2026-11-22 (gap hunt: more games, BBR node-wide, game-UDP pinning)
 
 - **Five more titles get the full CoD treatment.** Fortnite,

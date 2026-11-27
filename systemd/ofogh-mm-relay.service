@@ -1,0 +1,14 @@
+[Unit]
+Description=Ofogheamn transparent relay to the Demonware matchmaking gateway (TCP 3074)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ofodns
+ExecStart=/usr/bin/python3 /usr/local/bin/ofogh-mm-relay.py
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

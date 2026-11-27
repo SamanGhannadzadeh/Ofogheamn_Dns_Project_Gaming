@@ -236,7 +236,7 @@ def client(outbounds, final, game_tag=None):
                   "udp_timeout": "10m"})
     return {
         "dns": {"final": "remote",
-                "servers": [{"detour": final, "server": ip,
+                "servers": [{"detour": final, "server": ip, "server_port": 53,
                              "tag": "remote", "type": "udp"}]},
         "inbounds": [{"address": ["172.19.0.1/30", "fdfe:dcba:9876::1/126"],
                       "auto_route": True, "mtu": 1280, "stack": "mixed",
@@ -250,7 +250,8 @@ def client(outbounds, final, game_tag=None):
 main = {"type": "hysteria2", "tag": "proxy", "server": ip,
         "server_port": int(hy2.get("port", 443)),
         "password": hy2["password"], "tls": tls,
-        "hop_ports": client_hop, "hop_interval": "15s", "hop_interval_max": "45s"}
+        "server_ports": [client_hop.replace("-", ":")],
+        "hop_interval": "30s"}
 json.dump(client([main], "proxy"),
           open("/root/ofogh-hy2-client.json", "w"), indent=1)
 group = [dict(main, tag="proxy-hy2")]

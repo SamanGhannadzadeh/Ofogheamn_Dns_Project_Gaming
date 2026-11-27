@@ -569,6 +569,61 @@ PYEOF
           dns) lf=smartdns ;; proxy) lf=singbox ;; *) lf="${2:-smartdns}" ;;
         esac
         tail -n "${3:-50}" "/var/log/ofogheamn-dns/$lf.log" 2>/dev/null || tail -n "${3:-50}" /var/log/ofogheamn-dns/smartdns.log ;;
+  sni-relay)
+    shift
+    case "${1:-status}" in
+      enable)
+        need_root
+        sed -i 's|^bind-https \[::\]:443|bind-https 127.0.0.1:10443|' /etc/ofogheamn-dns/smartdns.conf
+        python3 - <<'PY'
+import json, os
+p = "/etc/ofogheamn-dns/sni-relay.json"
+cfg = {"suffixes": ["embodyvr.io"], "doh_names": []}
+if os.path.exists(p):
+    cfg.update(json.load(open(p)))
+with open(p, "w") as fh: json.dump(cfg, fh, indent=2)
+os.chmod(p, 0o600)
+print("SNI relay config:", p)
+PY
+        systemctl enable --now ofogh-sni-relay
+        systemctl restart ofogheamn-dns
+        echo "SNI relay on: TCP/443 routes by SNI; DoH moved to 127.0.0.1:10443."
+        echo "Point a licensing host at this node: ofogheamn-dns add-hijack <host> <node-ip>"
+        echo "(the host must sit under a suffix in sni-relay.json; default: embodyvr.io)" ;;
+      disable)
+        need_root
+        sed -i 's|^bind-https 127.0.0.1:10443|bind-https [::]:443|' /etc/ofogheamn-dns/smartdns.conf
+        systemctl disable --now ofogh-sni-relay 2>/dev/null || true
+        systemctl restart ofogheamn-dns
+        echo "SNI relay off: DoH is back on [::]:443" ;;
+      *) { [ -f /etc/ofogheamn-dns/sni-relay.json ] && systemctl is-active ofogh-sni-relay >/dev/null 2>&1; } && echo "SNI relay: on" || echo "SNI relay: off" ;;
+    esac ;;
+  mm-relay)
+    shift
+    case "${1:-status}" in
+      enable)
+        need_root
+        python3 - <<'PY'
+import json, os
+p = "/etc/ofogheamn-dns/mm-relay.json"
+cfg = {"host": "lsg.7500.prod.demonware.net", "port": 3074}
+if os.path.exists(p):
+    cfg.update(json.load(open(p)))
+with open(p, "w") as fh: json.dump(cfg, fh, indent=2)
+os.chmod(p, 0o600)
+print("matchmaking relay config:", p)
+PY
+        systemctl enable --now ofogh-mm-relay
+        /usr/local/bin/ofogheamn-firewall || true
+        echo "Matchmaking relay on (TCP 3074 -> real Demonware gateway)."
+        echo "Now point the name at this node: ofogheamn-dns add-hijack lsg.7500.prod.demonware.net <node-public-ip>" ;;
+      disable)
+        need_root; rm -f /etc/ofogheamn-dns/mm-relay.json
+        systemctl disable --now ofogh-mm-relay 2>/dev/null || true
+        /usr/local/bin/ofogheamn-firewall || true
+        echo "Matchmaking relay off (remove its add-hijack line too, if you added one)" ;;
+      *) [ -f /etc/ofogheamn-dns/mm-relay.json ] && echo "MM relay: on" || echo "MM relay: off" ;;
+    esac ;;
   add-hijack)
     need_root
     if [ "${2:-}" = "--file" ]; then
