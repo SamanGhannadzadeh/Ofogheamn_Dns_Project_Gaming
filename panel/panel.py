@@ -73,6 +73,21 @@ def read_lines(path):
         return []
 
 
+def tail_lines(path, count, max_bytes=2_000_000):
+    """Last `count` lines without loading the whole file (v1.33):
+    /api/logs used read_lines() on logs that rotate at 16 MB, so
+    every log view materialized the entire file per thread."""
+    try:
+        with open(path, "rb") as fh:
+            fh.seek(0, os.SEEK_END)
+            size = fh.tell()
+            fh.seek(max(0, size - max_bytes))
+            data = fh.read().decode("utf-8", "replace")
+        return data.splitlines()[-count:]
+    except OSError:
+        return []
+
+
 def write_lines(path, lines):
     with open(path, "w", encoding="utf-8") as fh:
         fh.write("\n".join(lines) + "\n")
@@ -271,6 +286,9 @@ def mesh_get():
 def mesh_save(c):
     with open(MESH_CONF, "w", encoding="utf-8") as fh:
         json.dump(c, fh, indent=1)
+    # mesh.json carries the shared mesh key (v1.33: it used to be
+    # written with default umask permissions).
+    os.chmod(MESH_CONF, 0o600)
 
 
 def mesh_load_raw():
@@ -398,12 +416,18 @@ def status():
         "mesh_enabled": mesh_get()["enabled"],
         "mesh_best": (mesh_get()["state"] or {}).get("best", ""),
         "mesh_service": svc_state("ofogheamn-mesh"),
+        "sni_relay": svc_state("ofogh-sni-relay"),
+        "mm_relay": svc_state("ofogh-mm-relay"),
         "transports": transports_get(),
     }
 
 
 class Handler(BaseHTTPRequestHandler):
     server_version = "OfogheamnPanel/1.0"
+    # Socket timeout for handler threads (v1.33): without it an
+    # unauthenticated client could park a thread forever with a
+    # never-completed request body.
+    timeout = 30
 
     def log_message(self, *args):
         pass
@@ -420,6 +444,11 @@ class Handler(BaseHTTPRequestHandler):
     def _body(self):
         try:
             n = int(self.headers.get("Content-Length", "0"))
+            # Cap request bodies (v1.33): _body runs before auth
+            # (for /api/login) and used to read whatever
+            # Content-Length claimed, unbounded.
+            if n < 0 or n > 65536:
+                return {}
             return json.loads(self.rfile.read(n) or b"{}")
         except Exception:
             return {}
@@ -484,7 +513,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/logs":
             svc = (qs.get("svc") or ["dns"])[0]
             fn = "smartdns.log" if svc == "dns" else "singbox.log"
-            lines = read_lines(os.path.join(LOGDIR, fn))[-120:]
+            lines = tail_lines(os.path.join(LOGDIR, fn), 120)
             return self._json(200, {"lines": lines})
         if path == "/api/mesh":
             return self._json(200, mesh_get())
@@ -521,6 +550,13 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(400, {"error": "missing X-Requested-With"})
 
         if path == "/api/logout":
+            # Invalidate the session (v1.33): logout used to leave
+            # the token valid for its full 12 h lifetime.
+            tok = ""
+            for part in (self.headers.get("Cookie") or "").split(";"):
+                if part.strip().startswith("ofogh_session="):
+                    tok = part.strip().split("=", 1)[1]
+            SESSIONS.pop(tok, None)
             return self._json(200, {"ok": True})
 
         if path == "/api/action":
@@ -1012,7 +1048,9 @@ async function refresh(){loadClients();try{const s=await api('/api/status');
   '<div class="card">دامنهٔ گیمینگ<b>'+s.gaming_count+'</b></div>'+
   '<div class="card">دامنهٔ مسدود<b>'+(s.blocklist_count||0)+'</b></div>'+
   '<div class="card">مش<b>'+(s.mesh_enabled?('روشن — خروجی: '+(s.mesh_best||'…')):'خاموش')+'</b></div>'+
-  '<div class="card">ترنسپورت‌های روشن<b>'+Object.values(s.transports||{}).filter(f=>f.on).length+' از ۶</b></div>';
+  '<div class="card">ترنسپورت‌های روشن<b>'+Object.values(s.transports||{}).filter(f=>f.on).length+' از ۶</b></div>'+
+  '<div class="card">رلهٔ SNI<b>'+dot(s.sni_relay)+'</b></div>'+
+  '<div class="card">رلهٔ مچ‌میکینگ<b>'+dot(s.mm_relay)+'</b></div>';
  const T=s.transports||{};
  const feats=[['console','پروکسی کنسول (بدون رمز، PS5)'],['hysteria2','Hysteria2'],['hysteria2-gecko','Hysteria2 + Gecko'],['tuic','TUIC'],['anytls','AnyTLS'],['reality','REALITY ‏(VLESS)'],['https-proxy','پروکسی HTTPS ‏(HTTP روی TLS)'],['recursive','بک‌اند بازگشتی Unbound']];
  $('t-list').innerHTML='<table>'+feats.map(([k,label])=>{const f=T[k]||{};return '<tr><td>'+label+'</td><td>'+(f.on?('<span class="ok">روشن</span> — پورت '+f.port+(k==='hysteria2'&&f.obfs?(' — ابهام: '+f.obfs):'')+(k==='hysteria2'&&f.hop_range?(' — هاپ: '+f.hop_range):'')):('<span class="bad">خاموش</span>'))+'</td><td>'+(f.on?('<button class="ghost" onclick="featureOp(\''+k+'\',\'disable\')">خاموش‌کردن</button>'):('<button class="ghost" onclick="featureOp(\''+k+'\',\'enable\')">روشن‌کردن</button>'))+'</td></tr>'}).join('')+'</table>';

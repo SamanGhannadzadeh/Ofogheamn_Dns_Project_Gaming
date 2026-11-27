@@ -1,0 +1,12 @@
+[Unit]
+Description=Ofogheamn cache warmer — bulk gaming catalogue (gentle)
+After=ofogheamn-dns.service
+Wants=ofogheamn-dns.service
+
+[Service]
+Type=oneshot
+Environment=TIER=bulk
+ExecStart=/usr/local/bin/ofogh-warm-all.sh
+Nice=19
+CPUWeight=20
+IOSchedulingClass=idle

@@ -74,6 +74,9 @@ def next_ip(peers):
     n = 2
     while f"10.66.0.{n}" in used:
         n += 1
+    if n > 254:
+        # Unchecked, peer #254 used to mint 10.66.0.256 (v1.33).
+        raise SystemExit("wireguard subnet exhausted (10.66.0.0/24)")
     return f"10.66.0.{n}"
 
 
@@ -111,9 +114,16 @@ def main():
         name = sys.argv[2]
         peers = [p for p in peers if p["name"] != name]
         priv = wg("genkey")
+        pub = subprocess.run(["wg", "pubkey"], input=priv,
+                             capture_output=True, text=True).stdout.strip()
+        if not priv or not pub:
+            # wg(8) failures used to be saved as an empty-key peer
+            # and wg0.conf rewritten broken (v1.33).
+            print("error: 'wg genkey/pubkey' failed — is wireguard-tools installed?",
+                  file=sys.stderr)
+            return 1
         peer = {"name": name, "privkey": priv,
-                "pubkey": subprocess.run(["wg", "pubkey"], input=priv,
-                                         capture_output=True, text=True).stdout.strip(),
+                "pubkey": pub,
                 "ip": next_ip(peers)}
         peers.append(peer)
         save_peers(peers)

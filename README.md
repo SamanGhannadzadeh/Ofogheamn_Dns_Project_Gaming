@@ -9,6 +9,7 @@
 > 🔐 **دستگاهت WireGuard ندارد؟** نود، L2TP/IPsec و PPTP هم دارد — بومیِ ویندوز و اندروید و روتر: [docs/VPN.fa.md](docs/VPN.fa.md)
 > 🖥️ **سرور داری؟** همین صفحه را ادامه بده و نود عمومی خودت را بالا بیاور.
 > 🎯 **هایجک Smart DNS چطور کار می‌کند؟** قانون دوستونی و خروجیِ انتخابی: [docs/HIJACK.fa.md](docs/HIJACK.fa.md)
+> 🎧 **صدای پیشرفتهٔ کالاف خطای NET03 می‌دهد؟** رله‌های شفاف (SNI روی ۴۴۳ و مچ‌میکینگ روی ۳۰۷۴)، فقط برای نام‌هایی که خودت فعال می‌کنی: [docs/TRANSPARENT-RELAYS.fa.md](docs/TRANSPARENT-RELAYS.fa.md)
 
 **سرور DNS و Smart DNS مخصوص گیمرها** — با هستهٔ SmartDNS، انتخاب سریع‌ترین IP سرور بازی از بین همهٔ پاسخ‌ها، پشتیبانی از جدیدترین پروتکل‌های DNS، قوانین هایجک (Smart DNS) و بهینه‌سازی ویژهٔ **Call of Duty / Warzone**.
 
@@ -50,7 +51,7 @@ cd Ofogheamn_Dns_Project_Gaming && sudo bash install.sh
 | DoH (DNS-over-HTTPS, RFC 8484) | 443 — `https://HOST/dns-query` | مرورگرها، iOS |
 | DoQ / DoH3 به‌سمت آپ‌استریم (RFC 9250 / RFC 9114) | — | سریع‌ترین مسیر به Cloudflare |
 
-آپ‌استریم‌ها: Cloudflare و Google و Quad9 روی DoH + DoT + DoQ + H3 + UDP — هرکدام زودتر و سالم‌تر جواب بدهد برنده است.
+آپ‌استریم‌ها (بنچمارک ۳۹ رزولور از روی نود واقعی، v1.31): Cloudflare در همهٔ پروتکل‌ها (۱–۲ میلی‌ثانیه) + رزولورهای شبکهٔ میزبان (Gcore، ‏۱ میلی‌ثانیه) + Google روی DoT برای گروه گیمینگ — Quad9 و بقیهٔ کندها به‌علت تأخیر بالا حذف شدند.
 
 ## نردبان پروکسی گیمینگ | The gaming proxy ladder
 

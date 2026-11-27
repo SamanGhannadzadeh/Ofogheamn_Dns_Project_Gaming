@@ -45,7 +45,15 @@ apt-get install -y -qq curl ca-certificates openssl dnsutils iproute2 ipset unbo
 # computed only at the final banner, and the wg block's
 # ${OFOGH_WG_ENDPOINT:-$PUBIP} then crashed fresh installs with
 # "PUBIP: unbound variable" under set -u (v1.4 fix).
-PUBIP="$(curl -s --max-time 5 https://ifconfig.me || hostname -I | awk '{print $1}')"
+PUBIP="$(curl -fs --max-time 5 https://ifconfig.me 2>/dev/null || hostname -I | awk '{print $1}')"
+# Validate (v1.33): curl without -f used to return HTTP error bodies
+# with exit 0, and the unvalidated string flowed into wg-server.conf
+# and the banner. Anything that is not an IPv4/IPv6 literal falls
+# back to the first local address.
+case "$PUBIP" in
+  *.*.*.*|*:*) : ;;
+  *) PUBIP="$(hostname -I | awk '{print $1}')" ;;
+esac
 
 # If we were piped in (no repo files next to us), fetch the project.
 if [ ! -f "$SRC_DIR/config/smartdns.conf" ]; then
@@ -101,6 +109,9 @@ id ofodns >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin
 mkdir -p "$ETC/lists" "$ETC/tls" /var/cache/ofogheamn-dns /var/log/ofogheamn-dns
 cp "$SRC_DIR/config/smartdns.conf" "$ETC/smartdns.conf"
 cp "$SRC_DIR/config/hijack.conf" "$ETC/hijack.conf"
+# smartdns.conf includes this file too; missing = fatal (same rule).
+# Preserve an existing file: it holds the operator's measured pins.
+[ -f "$ETC/edge-pin.conf" ] || cp "$SRC_DIR/config/edge-pin.conf" "$ETC/edge-pin.conf"
 cp "$SRC_DIR/config/blocklist.conf" "$ETC/blocklist.conf"
 cp "$SRC_DIR/config/force-dns.conf" "$ETC/force-dns.conf"
 # smartdns.conf includes this file; a missing conf-file is fatal
@@ -133,6 +144,7 @@ install -m 755 "$SRC_DIR/scripts/ofogheamn-qos.sh" /usr/local/bin/ofogheamn-qos
 install -m 755 "$SRC_DIR/scripts/update-dc-ranges.py" /usr/local/bin/update-dc-ranges
 install -m 755 "$SRC_DIR/scripts/ofogh-learn-domains.sh" /usr/local/bin/ofogh-learn-domains
 install -m 755 "$SRC_DIR/scripts/ofogh-ddns-allowlist.sh" /usr/local/bin/ofogh-ddns-allowlist
+install -m 755 "$SRC_DIR/scripts/ofogh-edge-pins.sh" /usr/local/bin/ofogh-edge-pins
 install -m 755 "$SRC_DIR/scripts/ofogh-sni-relay.py" /usr/local/bin/ofogh-sni-relay.py
 install -m 755 "$SRC_DIR/scripts/ofogh-mm-relay.py" /usr/local/bin/ofogh-mm-relay.py
 install -m 755 "$SRC_DIR/scripts/update-blocklist.sh" /usr/local/bin/update-blocklist
@@ -259,6 +271,11 @@ cp "$SRC_DIR/systemd/ofogheamn-health.service" /etc/systemd/system/ofogheamn-hea
 cp "$SRC_DIR/systemd/ofogheamn-health.timer" /etc/systemd/system/ofogheamn-health.timer
 cp "$SRC_DIR/systemd/ofogh-ddns.service" /etc/systemd/system/ofogh-ddns.service
 cp "$SRC_DIR/systemd/ofogh-ddns.timer" /etc/systemd/system/ofogh-ddns.timer
+cp "$SRC_DIR/systemd/ofogheamn-firewall.service" /etc/systemd/system/ofogheamn-firewall.service
+# QoS is OPT-IN like mesh: unit installed, never enabled here.
+# The owner turns it on with: touch /etc/ofogheamn-dns/qos.enabled
+# && systemctl enable --now ofogheamn-qos
+cp "$SRC_DIR/systemd/ofogheamn-qos.service" /etc/systemd/system/ofogheamn-qos.service
 # Mesh is OPT-IN: installed but never enabled by the installer.
 # The owner turns it on with: ofogheamn-dns mesh on
 touch /etc/ofogheamn-dns/mesh-upstream.conf
@@ -274,12 +291,18 @@ systemctl disable --now unbound 2>/dev/null || true
 # 3) The host resolver (and with it the proxy, which has no DNS section of
 #    its own) must resolve through the node DNS, not the provider's —
 #    otherwise SOCKS domain targets bypass every gaming rule above.
+#    The pre-install file is backed up first (v1.33): uninstall used
+#    to leave the host pointing at a resolver that no longer exists.
 if ! grep -q '^nameserver 127.0.0.1' /etc/resolv.conf 2>/dev/null; then
+  [ -e /etc/resolv.conf ] && [ ! -e "$ETC/resolv.conf.bak" ] \
+    && cp -a /etc/resolv.conf "$ETC/resolv.conf.bak" 2>/dev/null || true
   rm -f /etc/resolv.conf
   printf 'nameserver 127.0.0.1\noptions timeout:2 attempts:2\n' > /etc/resolv.conf
 fi
 systemctl daemon-reload
 systemctl enable ofogheamn-dns >/dev/null 2>&1 || true
+# Firewall state is runtime-only; re-apply it at every boot (v1.33).
+systemctl enable ofogheamn-firewall >/dev/null 2>&1 || true
 systemctl enable --now cod-warmup.timer >/dev/null 2>&1 || true
 systemctl enable --now ofogheamn-health.timer >/dev/null 2>&1 || true
 [ "$LITE" != "1" ] && systemctl enable --now ofogheamn-panel >/dev/null 2>&1 || true

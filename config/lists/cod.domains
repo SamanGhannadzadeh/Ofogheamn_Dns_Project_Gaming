@@ -7,6 +7,17 @@
 # storage) — its regional endpoints are chosen by DNS, which is
 # exactly what this project optimises.
 demonware.net
+# Exact session hostnames a console resolves around and during
+# matches (from live node logs) — listed explicitly so the cache
+# warmer keeps them at 0 ms instead of only the apex being warm.
+lsg.7500.prod.demonware.net
+rex-ps5-loginservice.prod.demonware.net
+rex-gvs.prod.demonware.net
+objectstore-publishers-cod.prod.demonware.net
+objectstore-cloud-prod-rex.egcp.demonware.net
+user-consent.prod.demonware.net
+genesis.stun.us.demonware.net
+genesis.stun.eu.demonware.net
 callofduty.com
 activision.com
 atvi.com

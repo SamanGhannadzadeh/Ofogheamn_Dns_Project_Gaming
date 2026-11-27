@@ -1,0 +1,18 @@
+[Unit]
+Description=Ofogheamn DNS — gaming QoS (DSCP EF egress marking)
+After=network-online.target ofogheamn-firewall.service
+Wants=network-online.target
+# QoS stays opt-in: the unit only runs once the operator drops
+# the flag file (touch /etc/ofogheamn-dns/qos.enabled). Its job
+# is boot persistence — iptables/tc state is runtime-only, so
+# without this unit an operator's QoS silently vanished at the
+# first reboot (v1.37 gap-hunt finding).
+ConditionPathExists=/etc/ofogheamn-dns/qos.enabled
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/ofogheamn-qos
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -300,7 +300,7 @@ if curl -fsSL --max-time 90 -o "$SD_BIN" \
       -e 's#^bind-tls \[::\]:853#bind-tls 127.0.0.1:15853#' \
       -e 's#^bind-https \[::\]:443#bind-https 127.0.0.1:15443#' \
       config/smartdns.conf > "$T/smartdns.conf"
-  for f in hijack.conf blocklist.conf force-dns.conf mesh-upstream.conf recursive.conf doh-resolvers.conf; do
+  for f in hijack.conf blocklist.conf force-dns.conf mesh-upstream.conf recursive.conf doh-resolvers.conf edge-pin.conf; do
     cp "config/$f" "$T/etc/"
   done
   cp config/lists/*.domains "$T/etc/lists/"
@@ -483,5 +483,219 @@ has scripts/ofogheamn-dns 'sni-relay)'
 chk "CLI exposes the sni-relay command" $?
 has scripts/ofogheamn-dns 'mm-relay)'
 chk "CLI exposes the mm-relay command" $?
+echo "== v1.32 gap hunt: relays are first-class =="
+has uninstall.sh 'ofogh-sni-relay'
+chk "uninstall disables the SNI relay service" $?
+has uninstall.sh 'ofogh-mm-relay.py'
+chk "uninstall removes the matchmaking relay binary" $?
+has uninstall.sh '3074/tcp'
+chk "uninstall closes the matchmaking relay port in ufw" $?
+has panel/panel.py '"sni_relay": svc_state("ofogh-sni-relay")'
+chk "panel status reports the SNI relay" $?
+has panel/panel.py '"mm_relay": svc_state("ofogh-mm-relay")'
+chk "panel status reports the matchmaking relay" $?
+has panel/panel.py 's.mm_relay'
+chk "panel dashboard renders the relay cards" $?
+has README.md 'TRANSPARENT-RELAYS.fa.md'
+chk "README links the transparent relays doc" $?
+hasnot README.md 'Google و Quad9'
+chk "README upstream line matches the benchmark prune" $?
+
+echo "== v1.33 deep debug: persistence, IPv6, uninstall, honesty =="
+has scripts/ofogheamn-firewall.sh 'OFOGH_DNS_IN6'
+chk "firewall mirrors the guarded ports into ip6tables" $?
+has scripts/ofogheamn-firewall.sh 'V6LIST'
+chk "firewall collects guarded ports for the v6 mirror" $?
+has systemd/ofogheamn-firewall.service 'ExecStart=/usr/local/bin/ofogheamn-firewall'
+chk "a boot unit re-applies the firewall (iptables is runtime-only)" $?
+has install.sh 'ofogheamn-firewall.service'
+chk "install ships the firewall boot unit" $?
+has install.sh 'systemctl enable ofogheamn-firewall'
+chk "install enables the firewall boot unit" $?
+has install.sh 'resolv.conf.bak'
+chk "install backs up the pre-install resolv.conf" $?
+has uninstall.sh 'resolv.conf.bak'
+chk "uninstall restores the backed-up resolv.conf" $?
+has uninstall.sh 'no-stub.conf'
+chk "uninstall removes the resolved no-stub drop-in" $?
+has uninstall.sh 'del_jumps'
+chk "uninstall deletes the firewall INPUT jumps before the chains" $?
+has uninstall.sh 'OFOGH_DNS_IN6'
+chk "uninstall cleans the IPv6 chain too" $?
+has uninstall.sh 'ofogh-ddns.timer'
+chk "uninstall disables the DDNS timer" $?
+has uninstall.sh 'ofogh-warm-all.timer'
+chk "uninstall disables the profile warm-all timer" $?
+has uninstall.sh 'ofogheamn-qos'
+chk "uninstall removes the QoS binary" $?
+has uninstall.sh 'ofogh-ddns-allowlist'
+chk "uninstall removes the DDNS allowlist binary" $?
+has uninstall.sh 'disable --now strongswan-starter'
+chk "uninstall disables (not just stops) the VPN daemons" $?
+hasnot config/smartdns.conf '^dns64 '
+chk "template ships DNS64 off (no NAT64 behind it)" $?
+has config/smartdns.conf 'log-size 16m'
+chk "template log rotation trimmed to 16m x3" $?
+has config/smartdns.conf 'domain-set -name psn'
+chk "template wires the PSN domain set" $?
+hasnot config/smartdns.conf '95.85.95.85'
+chk "template no longer hardcodes the reference host's resolvers" $?
+has systemd/99-ofogheamn-dns.conf 'ip_local_port_range = 10240 65535'
+chk "sysctl ephemeral floor stays clear of the service ports" $?
+hasnot scripts/apply-node-profile.sh '9.9.9.9'
+chk "profile edge group no longer re-adds the pruned Quad9" $?
+has scripts/apply-node-profile.sh 'PROFILE ABORT'
+chk "profile verifies its nameserver rewrites landed" $?
+has scripts/apply-node-profile.sh 'min(hop_start + 400, hop_end)'
+chk "client hop window never exceeds the server redirect range" $?
+has scripts/apply-node-profile.sh 'hijack-dns'
+chk "gateway client keeps its route rules (UDP pinning preserved)" $?
+has scripts/ofogheamn-dns 'gen_proxy || exit 1'
+chk "CLI feature toggles fail loudly when config generation fails" $?
+has scripts/ofogheamn-dns 'keeping the existing keypair'
+chk "reality re-enable keeps the existing keypair" $?
+has scripts/ofogheamn-dns 'keep the existing password on re-enable'
+chk "transport re-enable keeps existing passwords" $?
+has scripts/ofogheamn-dns 'grep -qxF'
+chk "allowlist add matches fixed strings, not regex" $?
+has scripts/ofogheamn-dns 'grep -vxF'
+chk "allowlist/list removals are fixed-string whole-line" $?
+has scripts/ofogheamn-dns 'sing-box.new check'
+chk "core update validates the new sing-box against the live config" $?
+has scripts/ofogheamn-dns 'sing-box.bak'
+chk "core update keeps a rollback binary" $?
+has scripts/ofogheamn-dns 'ABORT: the bind-https line'
+chk "sni-relay enable verifies the DoH bind actually moved" $?
+has panel/panel.py 'def tail_lines'
+chk "panel log view tails the file instead of loading it whole" $?
+has panel/panel.py 'SESSIONS.pop(tok, None)'
+chk "panel logout invalidates the session" $?
+has panel/panel.py 'n > 65536'
+chk "panel caps request bodies" $?
+has panel/panel.py 'os.chmod(MESH_CONF, 0o600)'
+chk "panel writes mesh.json with 0600 (it holds the mesh key)" $?
+has scripts/ofogh-sni-relay.py 'write_eof'
+chk "SNI relay half-closes instead of truncating on EOF" $?
+has scripts/ofogh-mm-relay.py 'write_eof'
+chk "matchmaking relay half-closes instead of truncating on EOF" $?
+has scripts/ofogheamn-health.py 'struct.error'
+chk "health probe survives a short DNS response" $?
+has scripts/gen-singbox-config.py 'quarantine_broken_etc'
+chk "config generator quarantines a corrupt feature JSON" $?
+has scripts/ofogheamn-wg-peer.py 'subnet exhausted'
+chk "wg peer tool bounds the subnet" $?
+has scripts/ofogheamn-dns 'getpwnam("ofodns")'
+chk "relay configs are chowned to the relay's service user" $?
+has scripts/cod-warmup.sh 'warm-fails'
+chk "cache warmer backs off permanently-dead names" $?
+has scripts/apply-node-profile.sh 'warm-fails'
+chk "profile warm-all shares the failure backoff" $?
+has scripts/cod-warmup.sh 'FILENAME==ARGV\[1\] { if'
+chk "warmer skip filter survives an empty state file (no NR==FNR trap)" $?
+echo "== v1.34: edge pins =="
+[ -x scripts/ofogh-edge-pins.sh ]
+chk "edge-pins tool exists and is executable" $?
+has scripts/ofogh-edge-pins.sh 's_client'
+chk "edge-pins verifies the edge certificate before pinning" $?
+has scripts/ofogh-edge-pins.sh 'Sony Interactive Entertainment'
+chk "edge-pins pins only the service owner's real edges" $?
+has scripts/ofogh-edge-pins.sh 'fjp01.ps5.update.playstation.net'
+chk "edge-pins default set covers the PS5 update host" $?
+has config/smartdns.conf 'conf-file /etc/ofogheamn-dns/edge-pin.conf'
+chk "template includes edge-pin.conf" $?
+[ -f config/edge-pin.conf ]
+chk "repo ships a comment-only edge-pin.conf (missing include is fatal)" $?
+has install.sh 'ofogh-edge-pins'
+chk "install ships the edge-pins tool" $?
+has install.sh 'edge-pin.conf'
+chk "install ships edge-pin.conf" $?
+has scripts/ofogheamn-dns 'edge-pins'
+chk "CLI exposes edge-pins" $?
+has uninstall.sh 'ofogh-edge-pins'
+chk "uninstall removes the edge-pins tool" $?
+echo "== v1.35: worldwide games expansion =="
+[ "$(grep -vc '^#\|^$' config/lists/gaming.domains)" -ge 1400 ]
+chk "gaming set carries the worldwide expansion (>=1400 verified names)" $?
+[ -z "$(grep -v '^#\|^$' config/lists/gaming.domains | sort | uniq -d)" ]
+chk "gaming set has no duplicate names" $?
+has config/lists/gaming.domains 'accounts.ea.com'
+chk "expansion covers EA account services" $?
+has config/lists/gaming.domains 'auth.riotgames.com'
+chk "expansion covers Riot auth" $?
+has config/lists/gaming.domains 'xsts.auth.xboxlive.com'
+chk "expansion covers Xbox Live auth" $?
+has config/lists/gaming.domains 'accounts.nintendo.com'
+chk "expansion covers Nintendo accounts" $?
+has config/smartdns.conf 'server 1.1.1.1 -group gaming'
+chk "gaming group is never encrypted-only (UDP members present)" $?
+has config/smartdns.conf 'server 8.8.8.8 -group gaming'
+chk "gaming group has a second provider's UDP member" $?
+echo "== v1.36: in-game session tuning =="
+has config/smartdns.conf 'domain-set:cod/ -speed-check-mode tcp:443 -response-mode fastest-response -rr-ttl-min 0'
+chk "cod set respects the publisher's own TTL (no cache inflation)" $?
+has config/lists/cod.domains 'lsg.7500.prod.demonware.net'
+chk "cod set lists the exact matchmaking hostname for warming" $?
+has config/lists/cod.domains 'genesis.stun.eu.demonware.net'
+chk "cod set lists the STUN hostnames for warming" $?
+has config/lists/psn.domains 'ps5.np.playstation.net'
+chk "psn set lists the exact session hostname for warming" $?
+echo "== v1.37: everything gap hunt =="
+has config/smartdns.conf '^server 8.8.8.8$'
+chk "default group has a plain-UDP Google member" $?
+has config/smartdns.conf '^server 9.9.9.9$'
+chk "default group has a plain-UDP Quad9 member" $?
+[ -f systemd/ofogheamn-qos.service ]
+chk "QoS boot-persistence unit exists" $?
+has systemd/ofogheamn-qos.service 'ConditionPathExists=/etc/ofogheamn-dns/qos.enabled'
+chk "QoS unit stays opt-in via the flag file" $?
+has install.sh 'ofogheamn-qos.service'
+chk "install ships the QoS unit (never enables it)" $?
+has systemd/cod-warmup.service 'Nice=19'
+chk "cache warmer yields CPU to the data path" $?
+echo "== v1.38: zero-server group guard =="
+has scripts/apply-node-profile.sh 'server \$s -group edge'
+chk "profile edge block is UDP-majority" $?
+has scripts/apply-node-profile.sh 'PROFILE ABORT: edge server block missing'
+chk "profile refuses to apply over a serverless edge group" $?
+has scripts/apply-node-profile.sh 'edge group has no plain-UDP server'
+chk "profile post-check demands a UDP edge member" $?
+has scripts/ofogheamn-health.py 'total server number 0'
+chk "health check watches for zero-server-group warnings" $?
+has scripts/ofogheamn-health.py 'dns-zero-server-group'
+chk "health reports the zero-server-group problem" $?
+echo "== v1.39: smart relay starter list =="
+has scripts/ofogheamn-dns 'public-ubiservices.ubi.com'
+chk "relay seed includes the Ubisoft service host" $?
+has scripts/ofogheamn-dns 'api.stumbleguys.com'
+chk "relay seed includes the Stumble Guys API host" $?
+has scripts/ofogheamn-dns 'accounts.ea.com'
+chk "relay seed includes the EA account host" $?
+has scripts/ofogheamn-dns 'demonware.net'
+chk "relay seed covers Demonware session hosts by suffix" $?
+has docs/TRANSPARENT-RELAYS.fa.md 'رلهٔ هوشمند'
+chk "relays doc documents the smart relay list" $?
+has docs/TRANSPARENT-RELAYS.fa.md 'egcp.demonware.net'
+chk "relays doc covers the egcp Demonware branch" $?
+echo "== v1.43: IP registration panel =="
+[ -f scripts/ofogh-ip-register.py ]
+chk "registration panel server ships" $?
+has scripts/ofogh-ip-register.py '_is_tunnel_ip'
+chk "panel refuses registrations made through a tunnel" $?
+[ -f systemd/ofogh-ipreg.service ]
+chk "panel has a systemd unit" $?
+echo "== v1.42: tiered cache warming =="
+has scripts/ofogh-warm-all.sh 'TIER'
+chk "warmer is tier-aware (hot session ring vs bulk catalogue)" $?
+has scripts/ofogh-warm-all.sh 'cod.domains'
+chk "hot tier warms the CoD/PSN session ring" $?
+[ -f systemd/ofogh-warm-bulk.timer ]
+chk "bulk warmer has its own 15-minute timer unit" $?
+echo "== v1.41: proxy session-retention tuning in the generator =="
+[ "$(grep -c '"idle_timeout": "300s"' scripts/gen-singbox-config.py)" -ge 3 ]
+chk "QUIC inbounds (hy2, gecko, tuic) get a 300s idle timeout" $?
+[ "$(grep -c '"udp_timeout": "10m"' scripts/gen-singbox-config.py)" -ge 5 ]
+chk "every ladder inbound keeps UDP sessions for 10 minutes" $?
+[ "$(grep -c '"tcp_fast_open": True' scripts/gen-singbox-config.py)" -ge 5 ]
+chk "TCP fast open is set on every TCP inbound" $?
 rm -rf "$SD_DIR"
 exit $fail

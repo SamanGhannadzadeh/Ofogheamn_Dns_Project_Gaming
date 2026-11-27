@@ -1,0 +1,13 @@
+[Unit]
+Description=Ofogheamn IP registration panel (self-service allowlist)
+After=network-online.target ofogheamn-firewall.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/local/bin/ofogh-ip-register.py
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

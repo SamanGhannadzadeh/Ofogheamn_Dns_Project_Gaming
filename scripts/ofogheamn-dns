@@ -45,9 +45,14 @@ except Exception:
 }
 get_mode() { grep -E '^mode=' "$ETC/mode.conf" 2>/dev/null | cut -d= -f2; }
 reload_dns() { systemctl restart "$SVC" && echo "${G}DNS reloaded${N}"; }
-gen_proxy() { OFOGH_ETC="$ETC" python3 /usr/local/lib/ofogheamn-dns/gen-singbox-config.py; }
+gen_proxy() { OFOGH_ETC="$ETC" python3 /usr/local/lib/ofogheamn-dns/gen-singbox-config.py || { echo "${R}proxy config generation FAILED — the running proxy was NOT changed${N}" >&2; return 1; }; }
 hijack_set() { # <domain> <ipv4> [ipv6] — file edit only; the caller reloads once
-  sed -i "\#^address /$1/#d" "$ETC/hijack.conf"
+  # Fixed-string filter, not sed (v1.33): the domain used to be a
+  # regex, so dots matched any character and removing one name
+  # could delete a lookalike's rule.
+  local tmp; tmp="$(mktemp)"
+  grep -vF "address /$1/" "$ETC/hijack.conf" > "$tmp" 2>/dev/null || true
+  cat "$tmp" > "$ETC/hijack.conf"; rm -f "$tmp"
   echo "address /$1/$2" >> "$ETC/hijack.conf"
   echo "address /$1/${3:-::}" >> "$ETC/hijack.conf"
 }
@@ -78,8 +83,13 @@ cmd_mode() {
 cmd_allow() {
   case "${1:-list}" in
     list) grep -vE '^\s*(#|$)' "$ETC/allowlist.txt" 2>/dev/null || echo "(empty)" ;;
-    add) need_root; grep -qx "$2" "$ETC/allowlist.txt" 2>/dev/null || echo "$2" >> "$ETC/allowlist.txt"; bash /usr/local/bin/ofogheamn-firewall ;;
-    remove) need_root; sed -i "\#^$2\$#d" "$ETC/allowlist.txt"; bash /usr/local/bin/ofogheamn-firewall ;;
+    add) need_root; grep -qxF "$2" "$ETC/allowlist.txt" 2>/dev/null || echo "$2" >> "$ETC/allowlist.txt"; bash /usr/local/bin/ofogheamn-firewall ;;
+    remove) need_root
+      # Fixed-string, whole-line (v1.33): the sed form treated the
+      # IP as a regex — removing 1.2.3.4 also matched 112.3.4.
+      tmp="$(mktemp)"; grep -vxF "$2" "$ETC/allowlist.txt" > "$tmp" 2>/dev/null || true
+      cat "$tmp" > "$ETC/allowlist.txt"; rm -f "$tmp"
+      bash /usr/local/bin/ofogheamn-firewall ;;
     *) echo "usage: ofogheamn-dns allow list|add|remove <ip-or-cidr>"; return 64 ;;
   esac
 }
@@ -87,8 +97,11 @@ cmd_allow() {
 list_op() { # $1=file $2=op $3=domain
   case "$2" in
     list) grep -vE '^\s*(#|$)' "$1" ;;
-    add) need_root; grep -qx "$3" "$1" || echo "$3" >> "$1"; echo "added: $3"; reload_dns ;;
-    remove) need_root; sed -i "/^$3$/d" "$1"; echo "removed: $3"; reload_dns ;;
+    add) need_root; grep -qxF "$3" "$1" || echo "$3" >> "$1"; echo "added: $3"; reload_dns ;;
+    remove) need_root
+      tmp="$(mktemp)"; grep -vxF "$3" "$1" > "$tmp" 2>/dev/null || true
+      cat "$tmp" > "$1"; rm -f "$tmp"
+      echo "removed: $3"; reload_dns ;;
   esac
 }
 
@@ -110,7 +123,7 @@ users.append({"user": sys.argv[1], "pass": sys.argv[2]})
 json.dump(users, open(p, "w"), indent=1)
 print("user saved:", sys.argv[1])
 PY
-      gen_proxy; systemctl restart ofogheamn-proxy && echo "${G}proxy reloaded${N}" ;;
+      gen_proxy || exit 1; systemctl restart ofogheamn-proxy && echo "${G}proxy reloaded${N}" ;;
     del-user)
       need_root
       [ -n "${2:-}" ] || { echo "usage: ofogheamn-dns proxy del-user <user>"; return 64; }
@@ -121,7 +134,7 @@ users = [u for u in json.load(open(p)) if u["user"] != sys.argv[1]]
 json.dump(users, open(p, "w"), indent=1)
 print("user removed:", sys.argv[1])
 PY
-      gen_proxy; systemctl restart ofogheamn-proxy && echo "${G}proxy reloaded${N}" ;;
+      gen_proxy || exit 1; systemctl restart ofogheamn-proxy && echo "${G}proxy reloaded${N}" ;;
     *) echo "usage: ofogheamn-dns proxy status|users|add-user <u> <p>|del-user <u>|restart"; return 64 ;;
   esac
 }
@@ -241,7 +254,7 @@ with open(p, "w") as fh: json.dump({"port": int(sys.argv[1])}, fh)
 os.chmod(p, 0o600)
 print("console port enabled:", sys.argv[1])
 PY
-        gen_proxy
+        gen_proxy || exit 1
         systemctl restart ofogheamn-proxy 2>/dev/null || true
         bash /usr/local/bin/ofogheamn-firewall >/dev/null 2>&1 || true
         MODE_NOW="$(grep -E '^mode=' "$ETC/mode.conf" 2>/dev/null | cut -d= -f2)"
@@ -249,7 +262,7 @@ PY
         [ "$MODE_NOW" = "private" ] || echo "WARNING: mode is not private — the firewall BLOCKS the console port in public mode. Run: ofogheamn-dns mode private" ;;
       disable)
         need_root; rm -f /etc/ofogheamn-dns/console.json
-        gen_proxy
+        gen_proxy || exit 1
         systemctl restart ofogheamn-proxy 2>/dev/null || true
         bash /usr/local/bin/ofogheamn-firewall >/dev/null 2>&1 || true
         echo "console port disabled" ;;
@@ -284,6 +297,12 @@ PY
       enable)
         need_root
         command -v sing-box >/dev/null || { echo "sing-box not installed"; exit 1; }
+        # Re-running enable must not rotate the keypair (v1.33): it
+        # used to mint fresh keys unconditionally, silently
+        # invalidating every client config already handed out.
+        if [ -f /etc/ofogheamn-dns/reality.json ]; then
+          echo "REALITY already enabled — keeping the existing keypair (client configs stay valid)"
+        else
         KP="$(sing-box generate reality-keypair)"
         PRIV="$(printf '%s' "$KP" | awk '/PrivateKey/{print $2}')"
         PUB="$(printf '%s' "$KP" | awk '/PublicKey/{print $2}')"
@@ -299,11 +318,12 @@ os.chmod(p, 0o600)
 print("REALITY enabled on :4443 — client needs: public_key=" + sys.argv[2]
       + " short_id=" + sys.argv[3] + " sni=www.microsoft.com")
 PY
-        gen_proxy
+        fi
+        gen_proxy || exit 1
         systemctl restart ofogheamn-proxy 2>/dev/null || true ;;
       disable)
         need_root; rm -f /etc/ofogheamn-dns/reality.json
-        gen_proxy
+        gen_proxy || exit 1
         systemctl restart ofogheamn-proxy 2>/dev/null || true; echo "REALITY disabled" ;;
       *) [ -f /etc/ofogheamn-dns/reality.json ] && echo "REALITY: on" || echo "REALITY: off" ;;
     esac ;;
@@ -318,18 +338,23 @@ PY
         python3 - "$PW" "$HPORT" <<'PY'
 import json, sys, os
 p = "/etc/ofogheamn-dns/hysteria2.json"
-with open(p, "w") as fh: json.dump({"port": int(sys.argv[2]), "password": sys.argv[1]}, fh)
+cfg = {}
+if os.path.exists(p):
+    cfg = json.load(open(p))  # keep the existing password on re-enable (v1.33)
+cfg["port"] = int(sys.argv[2])
+cfg.setdefault("password", sys.argv[1])
+with open(p, "w") as fh: json.dump(cfg, fh, indent=2)
 os.chmod(p, 0o600)
 print("hysteria2 enabled on udp/" + sys.argv[2])
 print("client URI: hysteria2://<password>@<server>:" + sys.argv[2] + "/?insecure=1")
 print("the password is stored in " + p + " (mode 600)")
 PY
-        gen_proxy
+        gen_proxy || exit 1
         systemctl restart ofogheamn-proxy 2>/dev/null || true
         bash /usr/local/bin/ofogheamn-firewall >/dev/null 2>&1 || true ;;
       disable)
         need_root; rm -f /etc/ofogheamn-dns/hysteria2.json
-        gen_proxy
+        gen_proxy || exit 1
         systemctl restart ofogheamn-proxy 2>/dev/null || true
         bash /usr/local/bin/ofogheamn-firewall >/dev/null 2>&1 || true
         echo "Hysteria2 disabled" ;;
@@ -365,7 +390,7 @@ else:
     print("obfs:", sys.argv[1], "(password in " + p + ")")
 json.dump(cfg, open(p, "w"), indent=2); os.chmod(p, 0o600)
 PY
-        gen_proxy
+        gen_proxy || exit 1
         systemctl restart ofogheamn-proxy 2>/dev/null || true ;;
       *) [ -f /etc/ofogheamn-dns/hysteria2.json ] && echo "Hysteria2: on" || echo "Hysteria2: off" ;;
     esac ;;
@@ -385,21 +410,24 @@ pw = None
 main = "/etc/ofogheamn-dns/hysteria2.json"
 if os.path.exists(main):
     pw = json.load(open(main)).get("password")
+old = {}
+if os.path.exists(p):
+    old = json.load(open(p))  # keep existing secrets on re-enable (v1.33)
 cfg = {"port": int(sys.argv[1]),
-       "password": pw or secrets.token_hex(16),
-       "obfs_password": secrets.token_hex(16),
+       "password": old.get("password") or pw or secrets.token_hex(16),
+       "obfs_password": old.get("obfs_password") or secrets.token_hex(16),
        "min_packet_size": 512, "max_packet_size": 1200}
 with open(p, "w") as fh: json.dump(cfg, fh, indent=2)
 os.chmod(p, 0o600)
 print("hysteria2-gecko enabled on udp/" + sys.argv[1] + " (parallel to the main Hysteria2; existing clients untouched)")
 print("passwords are stored in " + p + " (mode 600)")
 PY
-        gen_proxy
+        gen_proxy || exit 1
         systemctl restart ofogheamn-proxy 2>/dev/null || true
         bash /usr/local/bin/ofogheamn-firewall >/dev/null 2>&1 || true ;;
       disable)
         need_root; rm -f /etc/ofogheamn-dns/hysteria2-gecko.json
-        gen_proxy
+        gen_proxy || exit 1
         systemctl restart ofogheamn-proxy 2>/dev/null || true
         bash /usr/local/bin/ofogheamn-firewall >/dev/null 2>&1 || true
         echo "Hysteria2-Gecko disabled" ;;
@@ -415,19 +443,23 @@ PY
         python3 - "$TPORT" <<'PY'
 import json, sys, os, uuid, secrets
 p = "/etc/ofogheamn-dns/tuic.json"
-cfg = {"port": int(sys.argv[1]), "uuid": str(uuid.uuid4()),
-       "password": secrets.token_hex(16)}
+cfg = {}
+if os.path.exists(p):
+    cfg = json.load(open(p))  # keep uuid/password on re-enable (v1.33)
+cfg["port"] = int(sys.argv[1])
+cfg.setdefault("uuid", str(uuid.uuid4()))
+cfg.setdefault("password", secrets.token_hex(16))
 with open(p, "w") as fh: json.dump(cfg, fh, indent=2)
 os.chmod(p, 0o600)
 print("tuic v5 enabled on udp/" + sys.argv[1] + " (BBR, 0-RTT off)")
 print("uuid + password are stored in " + p + " (mode 600)")
 PY
-        gen_proxy
+        gen_proxy || exit 1
         systemctl restart ofogheamn-proxy 2>/dev/null || true
         bash /usr/local/bin/ofogheamn-firewall >/dev/null 2>&1 || true ;;
       disable)
         need_root; rm -f /etc/ofogheamn-dns/tuic.json
-        gen_proxy
+        gen_proxy || exit 1
         systemctl restart ofogheamn-proxy 2>/dev/null || true
         bash /usr/local/bin/ofogheamn-firewall >/dev/null 2>&1 || true
         echo "TUIC disabled" ;;
@@ -444,17 +476,22 @@ PY
         python3 - "$PW" "$APORT" <<'PY'
 import json, sys, os
 p = "/etc/ofogheamn-dns/anytls.json"
-with open(p, "w") as fh: json.dump({"port": int(sys.argv[2]), "password": sys.argv[1]}, fh)
+cfg = {}
+if os.path.exists(p):
+    cfg = json.load(open(p))  # keep the existing password on re-enable (v1.33)
+cfg["port"] = int(sys.argv[2])
+cfg.setdefault("password", sys.argv[1])
+with open(p, "w") as fh: json.dump(cfg, fh, indent=2)
 os.chmod(p, 0o600)
 print("anytls enabled on tcp/" + sys.argv[2])
 print("the password is stored in " + p + " (mode 600)")
 PY
-        gen_proxy
+        gen_proxy || exit 1
         systemctl restart ofogheamn-proxy 2>/dev/null || true
         bash /usr/local/bin/ofogheamn-firewall >/dev/null 2>&1 || true ;;
       disable)
         need_root; rm -f /etc/ofogheamn-dns/anytls.json
-        gen_proxy
+        gen_proxy || exit 1
         systemctl restart ofogheamn-proxy 2>/dev/null || true
         bash /usr/local/bin/ofogheamn-firewall >/dev/null 2>&1 || true
         echo "AnyTLS disabled" ;;
@@ -474,12 +511,12 @@ with open(p, "w") as fh: json.dump({"port": int(sys.argv[1])}, fh)
 os.chmod(p, 0o600)
 print("https-proxy enabled on tcp/" + sys.argv[1])
 PY
-        gen_proxy
+        gen_proxy || exit 1
         systemctl restart ofogheamn-proxy 2>/dev/null || true
         bash /usr/local/bin/ofogheamn-firewall >/dev/null 2>&1 || true ;;
       disable)
         need_root; rm -f /etc/ofogheamn-dns/https-proxy.json
-        gen_proxy
+        gen_proxy || exit 1
         systemctl restart ofogheamn-proxy 2>/dev/null || true
         bash /usr/local/bin/ofogheamn-firewall >/dev/null 2>&1 || true
         echo "HTTPS proxy disabled" ;;
@@ -562,6 +599,12 @@ PYEOF
       status) mesh_py status ;;
       *) echo "usage: ofogheamn-dns mesh on|off|status|init|key [value]|add-peer <name> <host:wgport> <pubkey> <mesh-ip>|del-peer <name>|peers" ;;
     esac ;;
+  edge-pins)
+    case "${2:-show}" in
+      run) need_root; /usr/local/bin/ofogh-edge-pins run ;;
+      show) cat /etc/ofogheamn-dns/edge-pin.conf 2>/dev/null || echo "(no edge pins yet)" ;;
+      *) echo "usage: ofogheamn-dns edge-pins [run|show]"; exit 64 ;;
+    esac ;;
   restart) need_root; reload_dns ;;
   start) need_root; systemctl start "$SVC" ;;
   stop) need_root; systemctl stop "$SVC" ;;
@@ -575,18 +618,42 @@ PYEOF
       enable)
         need_root
         sed -i 's|^bind-https \[::\]:443|bind-https 127.0.0.1:10443|' /etc/ofogheamn-dns/smartdns.conf
+        # Post-check (v1.33): a hand-edited bind line used to make
+        # this sed silently no-op while the CLI still claimed the
+        # relay was on.
+        grep -q '^bind-https 127.0.0.1:10443' /etc/ofogheamn-dns/smartdns.conf \
+          || { echo "ABORT: the bind-https line in smartdns.conf did not move to 127.0.0.1:10443 (hand-edited?); fix it manually first" >&2; exit 1; }
         python3 - <<'PY'
 import json, os
 p = "/etc/ofogheamn-dns/sni-relay.json"
-cfg = {"suffixes": ["embodyvr.io"], "doh_names": []}
+cfg = {"suffixes": ["embodyvr.io", "demonware.net",
+                    "public-ubiservices.ubi.com",
+                    "channel-service.upc.ubi.com", "account.ubisoft.com",
+                    "accounts.ea.com", "signin.ea.com", "gateway.ea.com",
+                    "api.stumbleguys.com",
+                    "fenrir-resolver-spacetime.aprod.scopely.io",
+                    "raven-spacetime.aprod.scopely.io"], "doh_names": []}
 if os.path.exists(p):
     cfg.update(json.load(open(p)))
 with open(p, "w") as fh: json.dump(cfg, fh, indent=2)
 os.chmod(p, 0o600)
+# The relay runs as user ofodns (v1.33): a root-owned 600 config
+# is unreadable to it, and the relay then silently falls back to
+# its compiled-in defaults — the operator's suffixes never apply.
+try:
+    import pwd
+    u = pwd.getpwnam("ofodns")
+    os.chown(p, u.pw_uid, u.pw_gid)
+except Exception:
+    pass  # no ofodns user on this host; root-run units read it fine
 print("SNI relay config:", p)
 PY
-        systemctl enable --now ofogh-sni-relay
+        # Order matters (v1.33): free :443 (restart SmartDNS onto
+        # its new loopback DoH bind) BEFORE starting the relay —
+        # starting the relay first always collided with SmartDNS
+        # and only the unit's Restart=on-failure rescued it.
         systemctl restart ofogheamn-dns
+        systemctl enable --now ofogh-sni-relay
         echo "SNI relay on: TCP/443 routes by SNI; DoH moved to 127.0.0.1:10443."
         echo "Point a licensing host at this node: ofogheamn-dns add-hijack <host> <node-ip>"
         echo "(the host must sit under a suffix in sni-relay.json; default: embodyvr.io)" ;;
@@ -611,6 +678,13 @@ if os.path.exists(p):
     cfg.update(json.load(open(p)))
 with open(p, "w") as fh: json.dump(cfg, fh, indent=2)
 os.chmod(p, 0o600)
+# Same ofodns readability fix as the SNI relay config (v1.33).
+try:
+    import pwd
+    u = pwd.getpwnam("ofodns")
+    os.chown(p, u.pw_uid, u.pw_gid)
+except Exception:
+    pass  # no ofodns user on this host; root-run units read it fine
 print("matchmaking relay config:", p)
 PY
         systemctl enable --now ofogh-mm-relay
@@ -667,6 +741,10 @@ PY
       *) echo "unsupported arch: $(uname -m)"; exit 1 ;;
     esac
     echo "updating SmartDNS core -> $TAG"
+    # Keep the previous cores (v1.33): an update used to replace
+    # both binaries in place with nothing to roll back to.
+    [ -x /usr/local/bin/smartdns ] && cp -a /usr/local/bin/smartdns /usr/local/bin/smartdns.bak || true
+    [ -x /usr/local/bin/sing-box ] && cp -a /usr/local/bin/sing-box /usr/local/bin/sing-box.bak || true
     curl -fsSL -o /usr/local/bin/smartdns.new "https://github.com/pymumu/smartdns/releases/download/$TAG/smartdns-$A" \
       && verify_digest "pymumu/smartdns" "$TAG" "smartdns-$A" /usr/local/bin/smartdns.new \
       && chmod 755 /usr/local/bin/smartdns.new && mv /usr/local/bin/smartdns.new /usr/local/bin/smartdns \
@@ -680,9 +758,17 @@ PY
     curl -fsSL -o /tmp/sing-box-update.tar.gz "https://github.com/SagerNet/sing-box/releases/download/$STAG/sing-box-${STAG#v}-linux-$SB_ARCH.tar.gz" \
       && verify_digest "SagerNet/sing-box" "$STAG" "sing-box-${STAG#v}-linux-$SB_ARCH.tar.gz" /tmp/sing-box-update.tar.gz \
       && tar -xzf /tmp/sing-box-update.tar.gz -C /tmp \
-      && install -m 755 "/tmp/sing-box-${STAG#v}-linux-$SB_ARCH/sing-box" /usr/local/bin/sing-box \
-      || { echo "sing-box update failed; keeping the current proxy"; exit 1; }
+      && install -m 755 "/tmp/sing-box-${STAG#v}-linux-$SB_ARCH/sing-box" /usr/local/bin/sing-box.new \
+      && /usr/local/bin/sing-box.new check -c /etc/ofogheamn-dns/singbox.json \
+      && mv /usr/local/bin/sing-box.new /usr/local/bin/sing-box \
+      || { rm -f /usr/local/bin/sing-box.new; echo "sing-box update failed or the new core rejects the current config; keeping the current proxy"; exit 1; }
     rm -f /tmp/sing-box-update.tar.gz
-    reload_dns; systemctl restart ofogheamn-proxy ;;
+    reload_dns; systemctl restart ofogheamn-proxy
+    sleep 1
+    if ! systemctl is-active ofogheamn-proxy >/dev/null 2>&1 && [ -x /usr/local/bin/sing-box.bak ]; then
+      echo "the new sing-box did not come up — rolling back to the previous binary"
+      cp -a /usr/local/bin/sing-box.bak /usr/local/bin/sing-box
+      systemctl restart ofogheamn-proxy || true
+    fi ;;
   *) sed -n '2,12p' "$0" ;;
 esac

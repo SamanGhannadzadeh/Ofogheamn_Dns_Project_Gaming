@@ -58,8 +58,13 @@ async def pump(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
     except Exception:
         pass
     finally:
+        # Half-close, not close (v1.33): closing the shared transport
+        # on one direction's EOF killed the opposite direction
+        # mid-stream. Signal EOF to the peer and let the sibling
+        # pump finish; handle() closes both writers at the end.
         try:
-            writer.close()
+            if writer.can_write_eof():
+                writer.write_eof()
         except Exception:
             pass
     return total
@@ -81,6 +86,11 @@ async def handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         print(f"closed {peer} -> {target_ip} after "
               f"{time.monotonic() - t0:.0f}s up={up} down={down}",
               flush=True)
+        for w in (writer, up_writer):
+            try:
+                w.close()
+            except Exception:
+                pass
     except Exception as e:
         print(f"mm relay error from {peer}: {e}",
               file=sys.stderr, flush=True)

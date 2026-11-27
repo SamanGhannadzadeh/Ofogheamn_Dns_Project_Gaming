@@ -60,6 +60,12 @@ for s in fortnite fifa valorant apex pubg; do
   sed -i "s#^nameserver /domain-set:$s/gaming#nameserver /domain-set:$s/edge#" "$CONF"
 done
 sed -i 's#^nameserver /domain-set:learned/gaming#nameserver /domain-set:learned/edge#' "$CONF"
+# Post-checks (v1.33): a sed whose anchor drifted used to leave the
+# profile printing "applied" with edge steering silently absent.
+for s in cod fortnite fifa valorant apex pubg learned; do
+  grep -q "^nameserver /domain-set:$s/edge" "$CONF" \
+    || { echo "PROFILE ABORT: nameserver rewrite missed for set '$s' — template format drifted; fix apply-node-profile.sh" >&2; exit 1; }
+done
 grep -q 'domain-set -name learned' "$CONF" || \
   echo "domain-set -name learned -file $ETC/lists/learned.domains" >> "$CONF"
 grep -q 'domain-rules /domain-set:learned/' "$CONF" || \
@@ -80,15 +86,26 @@ grep 'domain-rules /domain-set:cod/' "$CONF" | grep -q 'rr-ttl-min' || \
 if ! grep -q 'node-profile:edge:v1' "$CONF"; then
   {
     echo "# node-profile:edge:v1 (iran-baku) — ECS edge group"
-    for s in 1.1.1.1 1.0.0.1 8.8.8.8 8.8.4.4 9.9.9.9 9.9.9.11; do
-      echo "server-tls $s -group edge -exclude-default-group -subnet $CLIENT_SUBNET -subnet-all-query-types"
+    # UDP-majority (v1.38): the original block was encrypted-first
+    # (3x DoT + DoH + DoQ + H3, one UDP member). On an egress that
+    # blackholes TCP/QUIC to resolver IPs every encrypted member
+    # is dead, and on the reference node the whole block was once
+    # missing while the nameserver rewrites above were present —
+    # a group with zero servers, failing every uncached set name
+    # instantly while the cache hid it. Plain UDP carries; one
+    # DoT member remains for egresses where it works.
+    for s in 1.1.1.1 1.0.0.1 8.8.8.8; do
+      echo "server $s -group edge -exclude-default-group -subnet $CLIENT_SUBNET -subnet-all-query-types"
     done
-    echo "server 1.1.1.1 -group edge -exclude-default-group -subnet $CLIENT_SUBNET -subnet-all-query-types"
-    echo "server-https https://cloudflare-dns.com/dns-query -group edge -exclude-default-group -subnet $CLIENT_SUBNET -subnet-all-query-types"
-    echo "server-quic 1.1.1.1 -group edge -exclude-default-group -subnet $CLIENT_SUBNET -subnet-all-query-types"
-    echo "server-h3 h3://1.1.1.1/dns-query -group edge -exclude-default-group -subnet $CLIENT_SUBNET -subnet-all-query-types"
+    echo "server-tls 1.1.1.1 -group edge -exclude-default-group -subnet $CLIENT_SUBNET -subnet-all-query-types"
   } >> "$CONF"
 fi
+# Post-check (v1.38): the rewrites without the server block are a
+# loaded gun — refuse to print "applied" over a serverless group.
+grep -q 'node-profile:edge:v1' "$CONF" \
+  || { echo "PROFILE ABORT: edge server block missing from $CONF (nameserver lines point at a group with no servers)" >&2; exit 1; }
+grep -qE '^server [0-9.]+ -group edge' "$CONF" \
+  || { echo "PROFILE ABORT: edge group has no plain-UDP server in $CONF" >&2; exit 1; }
 
 # --- 2. Proxy features ----------------------------------------------------
 [ -f "$ETC/hysteria2.json" ] || ofogheamn-dns hysteria2 enable 443
@@ -135,10 +152,37 @@ cat > /usr/local/bin/ofogh-warm-all.sh <<'EOF'
 #!/bin/bash
 # Warm the whole gaming sets (A + AAAA) so every gaming lookup is
 # a cache hit; serve-expired covers the gaps between runs.
+# Failure backoff (v1.33, state shared with cod-warmup): names
+# that keep failing — dead domains in the sets SERVFAIL every
+# cycle — are skipped for 24 h after 4 consecutive failures. On
+# the reference node ~11% of all resolver answers were
+# warmer-driven SERVFAILs before this.
 LISTS=/etc/ofogheamn-dns/lists
+STATE=/var/cache/ofogheamn-dns/warm-fails.txt
+mkdir -p "$(dirname "$STATE")"; touch "$STATE"
+now=$(date +%s)
+CAND="$(mktemp)"; TRY="$(mktemp)"; FAIL="$(mktemp)"
+trap 'rm -f "$CAND" "$TRY" "$FAIL"' EXIT
 { cat "$LISTS"/*.domains 2>/dev/null; } \
-  | grep -vE '^[[:space:]]*(#|$)' | sort -u \
-  | xargs -P 8 -I{} sh -c 'dig @127.0.0.1 {} A >/dev/null 2>&1; dig @127.0.0.1 {} AAAA >/dev/null 2>&1'
+  | grep -vE '^[[:space:]]*(#|$)' | sort -u > "$CAND"
+awk -v now="$now" 'FILENAME==ARGV[1] { if (($2+0)>=4 && now-($3+0)<86400) skip[$1]=1; next } !($1 in skip)' "$STATE" "$CAND" > "$TRY"
+xargs -P 8 -I{} sh -c '
+  a="$(dig +short +time=2 +tries=1 @127.0.0.1 "{}" A 2>/dev/null)"
+  b="$(dig +short +time=2 +tries=1 @127.0.0.1 "{}" AAAA 2>/dev/null)"
+  [ -z "$a" ] && [ -z "$b" ] && echo "{}"
+' < "$TRY" > "$FAIL"
+awk -v now="$now" '
+  FILENAME==ARGV[1] { cnt[$1]=$2; ts[$1]=$3; next }
+  FILENAME==ARGV[2] { tried[$1]=1; next }
+  FILENAME==ARGV[3] { failed[$1]=1; next }
+  END {
+    for (n in cnt) {
+      if (n in tried) { if (n in failed) print n, cnt[n]+1, now }
+      else print n, cnt[n], ts[n]
+    }
+    for (n in failed) if (!(n in cnt)) print n, 1, now
+  }' "$STATE" "$TRY" "$FAIL" > "$STATE.new"
+mv "$STATE.new" "$STATE"
 EOF
 chmod 755 /usr/local/bin/ofogh-warm-all.sh
 cat > /etc/systemd/system/ofogh-warm-all.service <<'EOF'
@@ -211,8 +255,12 @@ import json, os
 etc = "/etc/ofogheamn-dns"
 ip = os.environ["SERVER_IP"]
 hop = os.environ["HOP_RANGE"].replace(":", "-")
-hop_start = int(hop.split("-")[0])
-client_hop = f"{hop_start}-{hop_start + 400}"
+hop_parts = hop.split("-")
+hop_start = int(hop_parts[0])
+hop_end = int(hop_parts[1]) if len(hop_parts) > 1 else hop_start + 400
+# The client hop window must never exceed the range the server
+# actually NAT-redirects (v1.33).
+client_hop = f"{hop_start}-{min(hop_start + 400, hop_end)}"
 hy2 = json.load(open(f"{etc}/hysteria2.json"))
 tls = {"enabled": True, "insecure": True, "server_name": "ofogheamn"}
 
@@ -356,11 +404,14 @@ gateway["inbounds"] = [{
     "auto_redirect": True, "auto_route": True, "mtu": 1280,
     "stack": "mixed", "strict_route": True, "tag": "tun-in",
     "type": "tun"}]
-gateway["route"] = {
-    "auto_detect_interface": True, "final": "auto",
-    "rules": [{"action": "hijack-dns", "port": 53},
-              {"action": "route", "outbound": "auto",
-               "udp_timeout": "10m"}]}
+# Keep client()'s rules — above all the game-UDP pinning rule —
+# and only prepend the DNS hijack (v1.33): replacing the whole
+# route used to drop the pinning, so console game UDP could ride
+# a TCP rung on the one client built for console game traffic.
+gateway["route"]["rules"] = (
+    [{"action": "hijack-dns", "port": 53}]
+    + gateway["route"]["rules"])
+gateway["route"]["final"] = "auto"
 json.dump(gateway, open("/root/ofogh-gateway.json", "w"), indent=1)
 print("client configs: /root/ofogh-client.json (auto: "
       + ", ".join(o["tag"] for o in group)

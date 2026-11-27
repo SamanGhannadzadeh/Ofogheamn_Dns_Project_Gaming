@@ -1,3 +1,379 @@
+## v1.43 — 2026-11-27 (self-service IP registration panel)
+
+Private mode gates the node by allowlist, which breaks for
+users whose egress IP rotates (CGNAT): they had to ask the
+operator to edit the list by hand. The node now ships a
+registration panel (`ofogh-ipreg.service`, port 8081,
+deliberately outside the allowlist chain so unregistered
+users can reach it): each user gets a personal code, opens
+the page, and their current IP replaces their previous one
+in the allowlist; the firewall is re-applied on every
+change. Codes are stored as SHA-256 hashes, one active IP
+per code, with per-code and per-source rate limits.
+Registrations made through a tunnel are refused — the panel
+would see the tunnel's egress, not the user's real IP — with
+a clear warning on the page. A status view shows the IP a
+code currently holds and when it last changed; an admin
+view (separate admin code, hash-stored) lists all users.
+Codes are managed with `scripts/ofogh-reg-admin.py`
+(add/list/revoke). Live since this version on the reference
+node, with the first real user registration verified.
+
+## v1.42 — 2026-11-27 (tiered cache warming; DNS core confirmed current)
+
+The all-sets cache warmer became its own denial of service:
+with the catalogue at ~1,500 names it ran ~3,000 digs at
+parallelism 8 every 4 minutes, saturating the node's single
+vCPU for ~90 s per cycle (load ~3) and queueing the proxy
+and tunnel traffic behind it — visible to the operator as
+periodic ping spikes that no transport tuning could remove.
+The warmer is now tiered. The hot tier (the CoD + PSN
+session ring, ~40 names) still warms every 4 minutes and
+finishes in ~12 s. The bulk catalogue warms on its own
+15-minute timer (`ofogh-warm-bulk.timer`) with 2 workers
+and staggered starts; serve-expired covers the gaps, and
+the v1.33 failure backoff is shared across tiers. Also
+verified: the deployed SmartDNS Release48.5 is the newest
+stable upstream release (only a nightly exists beyond it),
+so the resolver core itself is current.
+
+## v1.41 — 2026-11-27 (proxy session-retention tuning)
+
+An audit of the generated sing-box server config found the
+session-retention settings uneven across the transport
+ladder: the 10-minute UDP session timeout existed only on
+the mixed (SOCKS) inbound, so a game session carried over
+Hysteria2 or TUIC could be reaped far earlier than one over
+SOCKS; TCP fast open was missing on the REALITY, AnyTLS
+and HTTPS-proxy inbounds; and the QUIC inbounds had no idle
+timeout, so a quiet tunnel could be torn down between
+lobbies at the short library default. The generator now
+emits `udp_timeout: 10m` on every ladder inbound,
+`tcp_fast_open: true` on every TCP inbound, and
+`idle_timeout: 300s` on both Hysteria2 inbounds and TUIC.
+Applied live on the reference node and validated with
+`sing-box check` plus an end-to-end SOCKS request (204).
+
+## v1.40 — 2026-11-27 (CoD: complete the Demonware relay coverage)
+
+The v1.39 suffix list covered only the prod branch of
+Demonware. The reference node's relay journal showed the gap
+in the act: the console's rex-gvs connections arrived at the
+relay and were handed to the DoH backend (127.0.0.1:10443)
+because the suffix list the relay started with predated the
+widening — the login host (an exact entry) forwarded fine
+while its sibling session hosts fell through. v1.40 widens
+the seed suffix to `demonware.net`, covering every branch,
+and hijacks the one session host the console's log showed
+uncovered: objectstore-cloud-prod-rex.egcp.demonware.net.
+Verified live for all five Demonware session hosts (login,
+gvs, user-consent, both objectstores): node-IP answers and
+the real wildcard certificates (*.prod.demonware.net,
+*.egcp.demonware.net) through the relay. Deliberately left
+direct: cod-assets.cdn.callofduty.com (content CDN — relaying
+it through the node would only slow downloads) and
+ingest.datax.activision.com (telemetry, not session layer).
+Tests: 1 new static check (244 total).
+
+## v1.39 — 2026-11-27 (smart relay for publisher service hosts)
+
+The SNI relay grows from two licensing/session names to the
+major publishers' HTTPS service layer — the layer where the
+geo-block actually bites for many titles (account auth and
+session setup), and the layer the commercial Smart DNS
+services (Shecan and peers) steer the same way: the name
+answers with the node's IP, the connection exits at the node,
+and the relay forwards by SNI to the real destination with
+TLS end-to-end and the service's real certificate.
+
+Starter list (seeded by `sni-relay enable`; each name still
+needs its own explicit `add-hijack`): Ubisoft
+(public-ubiservices.ubi.com, channel-service.upc.ubi.com,
+account.ubisoft.com), EA (accounts.ea.com, signin.ea.com,
+gateway.ea.com), Scopely (api.stumbleguys.com, the Spacetime
+resolver/session hosts), and the Demonware session suffix
+prod.demonware.net — which also puts the already-hijacked
+user-consent / rex-gvs / objectstore hosts onto the relay
+instead of the DoH fall-through. Verified live on the
+reference node for all nine new hosts: node-IP answers, real
+issuer certificates through the relay (Ubisoft, DigiCert/EA,
+Amazon/Scopely), HTTP behavior identical to direct. Game UDP
+and the publishers' custom-port services are untouched, as
+before — this is the service layer, not the match path.
+Tests: 5 new static checks (243 total).
+
+## v1.38 — 2026-11-27 (the zero-server group: EA / Stumble Guys outage)
+
+Live incident: EA titles, Stumble Guys and The Crew Motorfest
+would not connect through the node. Log evidence: every query
+for the games' entry names (spring18/spring25 EA redirectors,
+api.stumbleguys.com, Scopely resolvers) returned SERVFAIL while
+public resolvers answered them fine. Two compounding causes:
+
+- **The profile's edge group had no servers on the node.** The
+  conf carried the profile's nameserver rewrites (cod/fifa/
+  psn/… → group `edge`) but the `node-profile:edge:v1` server
+  block itself was absent — SmartDNS logged 'total server
+  number 0' and failed every uncached edge name instantly at
+  0 ms. Pins and the cache had masked it since deployment:
+  pinned names answer locally, hot names were always cached.
+  Rotating names (seasonal EA redirectors) were the first to
+  hit it. The group is rebuilt on the node with UDP-majority
+  members carrying the profile's client-/24 ECS.
+- **A config prune then zeroed the default group too.** While
+  pruning dead encrypted upstreams (v1.37), a line-range edit
+  commented out the default group's working UDP members along
+  with the dead ones, and the follow-up edit that was meant to
+  add replacements silently matched nothing. Post-prune checks
+  read 0 ms — from the cache. Uncached default-group names
+  (Scopely among them) failed until the members were restored.
+  Recorded plainly: this one was the operator's own edit, and
+  the verification step that should have caught it trusted
+  cached answers.
+
+Guards so neither can hide again: the profile's edge block is
+now UDP-majority and the profile aborts loudly if the block or
+a plain-UDP edge member is missing after application; the
+health check scans the SmartDNS log for 'total server number
+0' warnings and reports `dns-zero-server-group`. Post-fix
+verification ran on a cold cache: EA (www + both redirectors),
+all Scopely/Stumble names, Ubisoft, Nintendo, PSN and general
+names all answer NOERROR. Tests: 5 new static checks
+(238 total).
+
+## v1.37 — 2026-11-27 (everything gap hunt)
+
+- **Upstream transport audit, completed:** the v1.35 fix
+  covered the gaming group; this pass probed every remaining
+  transport from the reference node. DoH to Cloudflare and
+  Google and DoQ to Cloudflare all time out (TCP/QUIC to
+  public-resolver IPs is blackholed on this egress class);
+  plain UDP answers everywhere (Cloudflare, Google, Quad9,
+  Gcore). The default group consequently gains plain-UDP
+  members for Google and Quad9 in the template — on such an
+  egress it previously had exactly one working member — and
+  the reference node's local config comments its dead
+  encrypted members out entirely.
+- **QoS boot persistence:** QoS (DSCP EF egress marking) was
+  an operator-run script whose iptables/tc state vanished at
+  reboot. New `ofogheamn-qos.service` re-applies it at boot,
+  gated on an opt-in flag file; install ships the unit but
+  never enables it. On the reference node QoS stays off by
+  decision: transit providers strip DSCP, and there is no
+  measured benefit on its path.
+- **Warmer politeness:** a full warm cycle over all sets takes
+  ~89 s on the 1-vCPU reference node; the warmer unit now runs
+  at Nice 19 / CPUWeight 20 / idle IO so a cycle can never
+  starve the DNS/proxy data path.
+- Checked and left alone, with reasons: panel/proxy run as
+  root (the panel performs systemctl operations by design;
+  both are firewall-guarded), the two additional allowlisted
+  users still at zero packets (their fix is per-user DDNS
+  hostnames, still not provided), and the node's own DDNS
+  (armed; waits on the owner's modem hostname).
+- Tests: 6 new static checks (233 total).
+
+## v1.36 — 2026-11-27 (in-game session tuning, DNS-only)
+
+Focus narrowed to what DNS can still do once a match starts,
+established from the reference node's live logs: a console
+resolves NO game-server hostnames mid-match (dedicated-server
+IPs arrive inside the matchmaking payload), so the honest
+DNS surface is the session ring around the match — login,
+matchmaking gateway, version/content services, STUN — staying
+instant and fresh for the whole session.
+
+- **Respect publisher TTLs on service sets:** the per-title
+  sets (cod, psn, fortnite, fifa, valorant, apex, pubg) no
+  longer inflate cached answers to a 120 s floor
+  (`-rr-ttl-min 0`). A publisher's short TTL is its load
+  balancer steering clients across gateway instances; a DNS
+  cache that inflates it holds players on instances the
+  balancer already rotated away from. Measured on the live
+  node: CoD's own names carry TTLs of 128–1021 s, so they were
+  never inflated in practice — this removes the trap for the
+  short-TTL names in those sets, it does not promise a CoD
+  gain that is not there.
+- **Warm the exact session hostnames:** cod.domains and
+  psn.domains now list the literal hostnames consoles resolve
+  around matches (lsg matchmaking, rex login/version,
+  objectstore, user-consent, genesis STUN, ps5.np, sgst, ena,
+  envelope2, uef) so the cache warmer keeps them at 0 ms
+  instead of only warming the apex.
+- Audited and deliberately left alone: dual-stack threshold
+  (the console's home v6 state is unproven from the node),
+  serve-expired (keeps a session alive through upstream
+  hiccups), and response modes (ECS steering already returns
+  region-appropriate instances; node-side probing cannot rank
+  instances for the client's own line).
+- Tests: 4 new static checks (227 total).
+
+## v1.35 — 2026-11-27 (worldwide games: 1,499 verified names)
+
+Not just Call of Duty anymore. The general gaming set grows
+from 575 to 1,499 names — publishers, platforms, franchises,
+studios and esports worldwide (EA, Ubisoft, Riot, Blizzard,
+Epic, Xbox, Nintendo, Rockstar, Roblox, Mojang, HoYoverse,
+Supercell, Nexon, Square Enix, Capcom, Bandai Namco, Konami,
+SEGA, Bethesda, 2K, WB, Bungie, Wargaming, Gaijin, Krafton,
+Pearl Abyss, NCSoft, Kakao, NetEase, Tencent and hundreds
+more). Every candidate (1,103) was verified to resolve live
+before inclusion; 105 dead names were dropped, so the cache
+warmer never burns cycles on corpses. Set entries suffix-match
+subdomains, so effective service-host coverage is several
+thousand. All of it inherits the existing wiring: edge/ECS
+upstreams, per-set speed-check (fastest IP), and cache warming
+with failure backoff.
+
+- **Critical fix found by the expansion:** the gaming upstream
+  group was DoT-only, and on the reference node's egress TCP to
+  the public resolver IPs (1.1.1.1, 8.8.8.8 — every port) is
+  blackholed while UDP/ICMP pass. The group resolved nothing
+  cold; cached names masked it via serve-expired for days, and
+  uncached gaming names (accounts.nintendo.com,
+  xsts.auth.xboxlive.com, …) SERVFAILed. The group now also has
+  plain-UDP members (Cloudflare + Gcore); 15 of the "dead"
+  candidates were casualties of this bug and were rescued on
+  re-verification through the fixed group.
+
+Sanction reachability, measured from the reference node's
+egress: EA accounts, Ubisoft services, Epic account service,
+Battle.net + OAuth, Riot auth, Xbox XSTS, Nintendo accounts,
+Steam API, Roblox auth and HoYoverse account API all complete
+TLS and answer (they refuse Iranian IPs directly; through the
+node's proxy exit they respond). Only legacy api.origin.com
+did not answer. Tests: 8 new static checks (223 total).
+
+## v1.34 — 2026-11-27 (fastest state: measured edge pins for PSN)
+
+Born on the live node: a PS5 (JP region) failed its system
+update check with a generic network error while DNS answered
+perfectly — the update hostname was being rotated onto an Akamai
+edge the client's line could not use, and other PSN names were
+rotating between clusters 50–70 ms apart in handshake time.
+
+- **Edge pins (`ofogheamn-dns edge-pins run`):** measures every
+  candidate A record several resolvers return for the built-in
+  PlayStation set, times the full TLS handshake from the node,
+  and pins the name to the fastest candidate — only after
+  openssl verifies the candidate serves Sony's real certificate
+  for that name, and only when it beats the current answer by
+  >3% (or equals it, locking out bad rotations). Unmeasurable
+  names keep their previous pin; nothing is pinned on a guess.
+  Pins live in `edge-pin.conf` (shipped comment-only, preserved
+  across reinstalls, included by the template).
+- Reference-node results: update host 139→118 ms class edge;
+  uef 165→116 ms, titlestore-preview 171→122 ms, broadcast
+  137→114 ms, action-cards 135→116 ms, library-lambda and home
+  to the same fast cluster. Four names (ps5.np, sgst, ena,
+  envelope2) already sat on their fastest edge and were left
+  alone; ps5cel.np.dl.playstation.net NXDOMAINs at Sony itself.
+- Audit notes: per-set speed-check was already on for the
+  gaming/PSN sets (global stays `none` on purpose — probing
+  every cold answer taxes small nodes), kernel download tuning
+  (BBR, fq, slow-start-after-idle=0, notsent_lowat) and sing-box
+  TCP Fast Open were verified already at their best values.
+- Tests: 10 new static checks (215 total).
+
+## v1.33 — 2026-11-27 (deep debug: persistence, IPv6, uninstall, honesty)
+
+A full audit of the repo plus the live reference node (34
+findings; the worst were invisible until looked for). Fixes:
+
+- **Firewall boot persistence (critical):** iptables state is
+  runtime-only and nothing re-applied it at boot — after a reboot
+  every guard vanished while the panel still said "private", and
+  a user-less mixed proxy became an open proxy again. New
+  `ofogheamn-firewall.service` (oneshot, before dns/proxy)
+  re-applies the saved mode on every boot; install enables it.
+- **IPv6 mirror (critical):** every listener binds `[::]` but the
+  firewall wrote IPv4 rules only — in private mode the allowlist
+  was fully bypassable over IPv6 (verified live: ip6tables empty,
+  INPUT ACCEPT). `ofogheamn-firewall` now mirrors the whole
+  guarded set into `OFOGH_DNS_IN6` with the same semantics
+  (allowlist chain in private mode; rate-limited DNS, open
+  authenticated transports, dropped no-auth ports in public).
+- **Uninstall actually removes things:** it now deletes the
+  firewall INPUT jumps before the chains (the old flush-only code
+  could never delete a referenced chain), cleans both address
+  families plus the NAT hop redirect, MSS clamps, MASQUERADEs and
+  QoS ipsets, restores the pre-install `/etc/resolv.conf` (install
+  now backs it up) and the resolved stub, disables — not just
+  stops — the VPN daemons, and removes the DDNS units, the boot
+  firewall unit, the profile's warm-all/learn units and four
+  binaries it used to leave behind (qos, dc-ranges, learn,
+  ddns-allowlist).
+- **Cache-warmer failure backoff:** ~11% of all answers on the
+  live node were SERVFAILs from the warmers re-resolving dead
+  set domains (pokedex3d.com, 100classicbooks.com, legacy
+  Blizzard/Steam names…) every 4 minutes. Both warmers now share
+  a failure state: 4 consecutive failures → skipped for 24 h.
+  SmartDNS log rotation trimmed 64 MB×4 → 16 MB×3.
+- **DNS64 off by default:** the template enabled synthesis with
+  no NAT64 behind it, stalling dual-stack clients on an unrouted
+  prefix. The template also stops hardcoding the reference
+  host's resolvers, finally wires the PSN domain set (it shipped
+  unwired; only profiled nodes ever got it), and the sysctl
+  template's ephemeral range starts at 10240, clear of the
+  service ports.
+- **Profile honesty:** the edge group no longer re-adds the
+  Quad9 pair the benchmark pruned; the nameserver rewrites are
+  post-checked and abort loudly on template drift; the client
+  hop window is capped at the server's redirect range; the
+  gateway client keeps its game-UDP pinning rule (only the DNS
+  hijack is prepended now).
+- **CLI honesty:** a refused config generation (e.g. a port
+  collision) used to be followed by "enabled" messages and a
+  lying status — toggles now abort on generation failure.
+  Re-running a transport `enable` keeps the existing
+  keypair/passwords instead of silently rotating them and
+  invalidating every distributed client. Allow/hijack/list edits
+  are fixed-string (an IP was treated as a regex: removing
+  1.2.3.4 also matched 112.3.4). `sni-relay enable` restarts
+  SmartDNS before starting the relay (port order) and verifies
+  the DoH bind actually moved. `update` keeps `.bak` cores,
+  validates the new sing-box against the live config before
+  swapping, and rolls back if it does not come up.
+- **Panel:** log view tails the last 2 MB instead of loading a
+  whole 16 MB log per request; logout invalidates the session
+  token; request bodies are capped (the reader runs pre-auth)
+  and handler threads have a socket timeout; `mesh.json` (mesh
+  key inside) is written 0600.
+- **Relays half-close:** both relays closed the shared transport
+  when one direction hit EOF, truncating the other direction
+  mid-stream; they now `write_eof()` and close only when both
+  pumps finish.
+- **Robustness:** the config generator quarantines a corrupt
+  feature JSON instead of taking every inbound down with it (the
+  user store still fails loudly); secret files are created 0600
+  rather than chmodded after; the health probe survives a short
+  DNS response; the wg-peer tool checks `wg` failures and bounds
+  the subnet; VPN credential rendering escapes quotes; the
+  installer's public-IP probe is validated.
+- Tests: 45 new static checks (205 total).
+
+## v1.32 — 2026-11-27 (gap hunt: the v1.31 relays become first-class)
+
+The v1.31 relays shipped in the installer and the CLI but were
+invisible or immortal everywhere else. This release closes those
+three gaps; no behaviour of the relays themselves changes.
+
+- **Uninstall now removes the relays.** install.sh ships the
+  SNI and matchmaking relays (binaries, units, enabled services),
+  but uninstall.sh never stopped or removed them — an uninstalled
+  node kept listening on TCP/443 (SNI router) and TCP/3074 with
+  nobody owning it. Uninstall now disables both services, deletes
+  both unit files and both binaries, and closes 3074/tcp in ufw.
+- **The panel shows the relays.** /api/status reports
+  `sni_relay` and `mm_relay` service states, and the dashboard
+  renders a card for each next to the transport cards — before
+  this, the only way to know a relay was up was the CLI.
+- **README catches up with v1.31.** The transparent-relays doc
+  is linked from the top guide list (NET03 entry point), and the
+  upstream line no longer advertises Quad9, which the 39-resolver
+  benchmark pruned in v1.31.
+- Tests: 160/160 static checks pass (8 new).
+
 ## v1.31 — 2026-11-27 (live-node lessons: open-proxy fix, SERVFAIL fix, 1.14 formats, transparent relays)
 
 Every item in this release was found or proven on a live node

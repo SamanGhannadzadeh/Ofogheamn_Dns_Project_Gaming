@@ -17,6 +17,9 @@ CHAIN=OFOGH_DNS_IN
 MODE=public
 [ -r "$ETC/mode.conf" ] && MODE="$(grep -E '^mode=' "$ETC/mode.conf" | cut -d= -f2)"
 MODE="${MODE:-public}"
+# Guarded ports collected for the IPv6 mirror at the end of this
+# script (v1.33): "proto:port:class", class dns|auth|noauth.
+V6LIST="udp:53:dns tcp:53:dns udp:853:dns tcp:853:dns udp:443:dns tcp:443:dns"
 
 iptables -N "$CHAIN" 2>/dev/null || iptables -F "$CHAIN"
 for proto in udp tcp; do
@@ -72,6 +75,7 @@ if [ -r "$ETC/console.json" ]; then
   CPORT="$(python3 -c "import json;print(json.load(open('$ETC/console.json'))['port'])" 2>/dev/null || true)"
 fi
 if [ -n "$CPORT" ]; then
+  V6LIST="$V6LIST udp:$CPORT:noauth tcp:$CPORT:noauth"
   if [ "$MODE" = "private" ]; then
     for proto in udp tcp; do
       iptables -C INPUT -p "$proto" --dport "$CPORT" -j "$CHAIN" 2>/dev/null \
@@ -96,6 +100,7 @@ if [ -r "$ETC/hysteria2.json" ]; then
   HY2="$(python3 -c "import json;print(json.load(open('$ETC/hysteria2.json'))['port'])" 2>/dev/null || true)"
 fi
 if [ -n "$HY2" ]; then
+  V6LIST="$V6LIST udp:$HY2:auth"
   if [ "$MODE" = "private" ]; then
     iptables -C INPUT -p udp --dport "$HY2" -j "$CHAIN" 2>/dev/null \
       || iptables -I INPUT 1 -p udp --dport "$HY2" -j "$CHAIN"
@@ -130,6 +135,7 @@ for spec in "tuic.json udp TUIC" "anytls.json tcp AnyTLS" "hysteria2-gecko.json 
   if [ -r "$ETC/$1" ]; then
     P="$(python3 -c "import json;print(json.load(open('$ETC/$1'))['port'])" 2>/dev/null || true)"
     if [ -n "$P" ]; then
+      V6LIST="$V6LIST $2:$P:auth"
       if [ "$MODE" = "private" ]; then
         iptables -C INPUT -p "$2" --dport "$P" -j "$CHAIN" 2>/dev/null \
           || iptables -I INPUT 1 -p "$2" --dport "$P" -j "$CHAIN"
@@ -174,6 +180,7 @@ fi
 if [ -r "$ETC/mm-relay.json" ]; then
   MMPORT="$(python3 -c "import json;print(json.load(open('$ETC/mm-relay.json'))['port'])" 2>/dev/null || true)"
   if [ -n "$MMPORT" ]; then
+    V6LIST="$V6LIST tcp:$MMPORT:noauth"
     if [ "$MODE" = "private" ]; then
       iptables -C INPUT -p tcp --dport "$MMPORT" -j "$CHAIN" 2>/dev/null \
         || iptables -I INPUT 1 -p tcp --dport "$MMPORT" -j "$CHAIN"
@@ -213,3 +220,70 @@ for iface in wg0 ppp+; do
            -j TCPMSS --clamp-mss-to-pmtu
   done
 done
+
+# ---------- IPv6 mirror (v1.33) ----------
+# Every listener binds [::], but everything above historically wrote
+# iptables (IPv4) rules only: in private mode the allowlist was fully
+# bypassable over IPv6 (found live on the reference node: ip6tables
+# empty, INPUT policy ACCEPT, the no-auth mixed proxy reachable).
+# Mirror the guarded set into ip6tables with the same semantics:
+# private -> allowlist chain (lo + wg0 + IPv6 allowlist entries);
+# public -> DNS ports keep the rate-limit chain, authenticated
+# transports are open, no-auth ports (console, mm-relay, a user-less
+# 2080) are dropped, exactly as on IPv4.
+CHAIN6=OFOGH_DNS_IN6
+if command -v ip6tables >/dev/null 2>&1; then
+  ip6tables -N "$CHAIN6" 2>/dev/null || ip6tables -F "$CHAIN6"
+  if [ "$MODE" = "private" ]; then
+    ip6tables -A "$CHAIN6" -i lo -j RETURN
+    ip6tables -A "$CHAIN6" -i wg0 -j RETURN
+    if [ -r "$ETC/allowlist.txt" ]; then
+      while read -r net; do
+        case "$net" in
+          ''|\#*) continue ;;
+          *:*)
+            ip6tables -A "$CHAIN6" -s "$net" -j RETURN ;;
+        esac
+      done < "$ETC/allowlist.txt"
+    fi
+    ip6tables -A "$CHAIN6" -j DROP
+  else
+    for proto in udp tcp; do
+      ip6tables -A "$CHAIN6" -p "$proto" --dport 53 -m hashlimit \
+        --hashlimit-name "ofogh_dns6_$proto" --hashlimit 120/second \
+        --hashlimit-burst 240 --hashlimit-mode srcip -j RETURN
+      ip6tables -A "$CHAIN6" -p "$proto" --dport 53 -j DROP
+    done
+  fi
+  for entry in $V6LIST; do
+    proto="${entry%%:*}"; rest="${entry#*:}"; port="${rest%%:*}"; class="${rest##*:}"
+    if [ "$MODE" = "private" ] || [ "$class" = "dns" ]; then
+      ip6tables -C INPUT -p "$proto" --dport "$port" -j "$CHAIN6" 2>/dev/null \
+        || ip6tables -I INPUT 1 -p "$proto" --dport "$port" -j "$CHAIN6"
+    elif [ "$class" = "auth" ]; then
+      ip6tables -C INPUT -p "$proto" --dport "$port" -j ACCEPT 2>/dev/null \
+        || ip6tables -I INPUT 1 -p "$proto" --dport "$port" -j ACCEPT
+    else
+      ip6tables -C INPUT -p "$proto" --dport "$port" -j DROP 2>/dev/null \
+        || ip6tables -I INPUT 1 -p "$proto" --dport "$port" -j DROP
+    fi
+  done
+  # Panel (8080) + mixed proxy (2080), mirroring the IPv4 block above.
+  if [ "$MODE" = "private" ]; then
+    ip6tables -C INPUT -p tcp --dport 8080 -j "$CHAIN6" 2>/dev/null \
+      || ip6tables -I INPUT 1 -p tcp --dport 8080 -j "$CHAIN6"
+    for proto in udp tcp; do
+      ip6tables -C INPUT -p "$proto" --dport 2080 -j "$CHAIN6" 2>/dev/null \
+        || ip6tables -I INPUT 1 -p "$proto" --dport 2080 -j "$CHAIN6"
+    done
+    echo "ipv6 mirror: private (allowlist chain $CHAIN6)"
+  else
+    if ! python3 -c "import json,sys; u=json.load(open('$ETC/proxy-users.json')); sys.exit(0 if u else 1)" 2>/dev/null; then
+      for proto in udp tcp; do
+        ip6tables -C INPUT -p "$proto" --dport 2080 -j DROP 2>/dev/null \
+          || ip6tables -I INPUT 1 -p "$proto" --dport 2080 -j DROP
+      done
+    fi
+    echo "ipv6 mirror: public"
+  fi
+fi

@@ -6,3 +6,8 @@ Wants=ofogheamn-dns.service
 [Service]
 Type=oneshot
 ExecStart=/usr/local/bin/cod-warmup
+# Warming is background work: on a 1-vCPU node a full cycle over
+# every set must never starve the DNS/proxy data path (v1.37).
+Nice=19
+CPUWeight=20
+IOSchedulingClass=idle

@@ -1,0 +1,10 @@
+[Unit]
+Description=Warm the bulk gaming catalogue every 15 minutes
+
+[Timer]
+OnBootSec=4min
+OnUnitActiveSec=15min
+Unit=ofogh-warm-bulk.service
+
+[Install]
+WantedBy=timers.target

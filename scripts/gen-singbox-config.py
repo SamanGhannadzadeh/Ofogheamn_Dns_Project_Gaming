@@ -29,7 +29,52 @@ ETC = os.environ.get("OFOGH_ETC", "/etc/ofogheamn-dns")
 PORT = int(os.environ.get("OFOGH_PROXY_PORT", "2080"))
 
 
+def quarantine_broken_etc() -> None:
+    """Validate the feature JSONs before generating (v1.33).
+
+    One corrupt optional file used to abort generation of ALL
+    inbounds — including the baseline mixed proxy — and most
+    callers swallowed the failure, so the proxy restarted onto a
+    stale config or died. Optional files that fail to parse or
+    lack their required keys are moved aside to <name>.broken and
+    skipped with a warning; the base user store fails loudly
+    instead, because silently emptying it would change the
+    proxy's auth posture."""
+    required = {
+        "console.json": (),
+        "reality.json": ("private_key",),
+        "hysteria2.json": ("password",),
+        "hysteria2-gecko.json": ("password", "obfs_password"),
+        "tuic.json": ("uuid", "password"),
+        "anytls.json": ("password",),
+        "https-proxy.json": (),
+    }
+    for name, keys in required.items():
+        p = os.path.join(ETC, name)
+        if not os.path.exists(p):
+            continue
+        try:
+            data = json.load(open(p, encoding="utf-8"))
+            missing = [k for k in keys if not data.get(k)]
+            if missing:
+                raise ValueError("missing keys: " + ", ".join(missing))
+        except Exception as e:
+            dst = p + ".broken"
+            os.replace(p, dst)
+            print(f"warning: {name} is unusable ({e}); moved to "
+                  f"{dst} — that feature is OFF", file=sys.stderr)
+    users_file = os.path.join(ETC, "proxy-users.json")
+    if os.path.exists(users_file):
+        try:
+            json.load(open(users_file, encoding="utf-8"))
+        except Exception as e:
+            print(f"error: proxy-users.json is corrupt ({e}); "
+                  "refusing to generate", file=sys.stderr)
+            raise SystemExit(1)
+
+
 def main() -> int:
+    quarantine_broken_etc()
     users_file = os.path.join(ETC, "proxy-users.json")
     users = []
     if os.path.exists(users_file):
@@ -88,18 +133,22 @@ def main() -> int:
                                     "ofogheamn:operator"))
             vless_users.append({"uuid": uid, "flow": "xtls-rprx-vision"})
             clients.append({"user": "operator", "uuid": uid})
-        with open(os.path.join(ETC, "reality-clients.json"), "w", encoding="utf-8") as fh:
+        # 0600 from creation, not chmod-after-write (v1.33).
+        rc_path = os.path.join(ETC, "reality-clients.json")
+        fd = os.open(rc_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
             json.dump({"server_name": r.get("server_name", "www.microsoft.com"),
                        "port": int(r.get("port", 443)),
                        "public_key": r.get("public_key", ""),
                        "short_id": r.get("short_id", ""),
                        "clients": clients}, fh, indent=2)
-        os.chmod(os.path.join(ETC, "reality-clients.json"), 0o600)
         inbounds.append({
             "type": "vless",
             "tag": "ofogh-reality",
             "listen": "::",
             "listen_port": int(r.get("port", 443)),
+            "tcp_fast_open": True,
+            "udp_timeout": "10m",
             "users": vless_users,
             "tls": {
                 "enabled": True,
@@ -129,6 +178,8 @@ def main() -> int:
             "tag": "ofogh-hysteria2",
             "listen": "::",
             "listen_port": hy2_port,
+            "udp_timeout": "10m",
+            "idle_timeout": "300s",
             "users": [{"password": h["password"]}],
             "bbr_profile": h.get("bbr_profile", "conservative"),
             "tls": {
@@ -171,6 +222,8 @@ def main() -> int:
             "tag": "ofogh-hysteria2-gecko",
             "listen": "::",
             "listen_port": gecko_port,
+            "udp_timeout": "10m",
+            "idle_timeout": "300s",
             "users": [{"password": g["password"]}],
             "bbr_profile": g.get("bbr_profile", "conservative"),
             "obfs": {"type": "gecko",
@@ -200,6 +253,8 @@ def main() -> int:
             "tag": "ofogh-tuic",
             "listen": "::",
             "listen_port": tuic_port,
+            "udp_timeout": "10m",
+            "idle_timeout": "300s",
             "users": [{"uuid": t["uuid"], "password": t["password"]}],
             "congestion_control": "bbr",
             "zero_rtt_handshake": False,
@@ -225,6 +280,8 @@ def main() -> int:
             "tag": "ofogh-anytls",
             "listen": "::",
             "listen_port": anytls_port,
+            "tcp_fast_open": True,
+            "udp_timeout": "10m",
             "users": [{"name": "ofogh", "password": a["password"]}],
             "tls": {
                 "enabled": True,
@@ -241,6 +298,7 @@ def main() -> int:
             "tag": "ofogh-https-proxy",
             "listen": "::",
             "listen_port": int(hp.get("port", 9443)),
+            "tcp_fast_open": True,
             "tls": {
                 "enabled": True,
                 "certificate_path": os.path.join(ETC, "tls", "fullchain.pem"),
@@ -283,9 +341,11 @@ def main() -> int:
                              "udp_timeout": "10m"}]},
     }
     out = os.path.join(ETC, "singbox.json")
-    with open(out, "w", encoding="utf-8") as fh:
+    # 0600 from creation, not chmod-after-write (v1.33): the file
+    # carries every proxy password in cleartext.
+    fd = os.open(out, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
         json.dump(cfg, fh, indent=2)
-    os.chmod(out, 0o600)
     print(f"singbox.json written: {len(users)} user(s), port {PORT}"
           + (f", console port {console_port} (no auth, firewall-guarded)"
              if console_port else "")

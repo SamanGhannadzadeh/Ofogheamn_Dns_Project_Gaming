@@ -52,7 +52,9 @@ def raw_a_query(host, timeout=3.0):
         ms = (time.time() - t0) * 1000
         rid, flags, qd, an = struct.unpack(">HHHH", data[:8])
         return rid == tid and an >= 1, round(ms, 1)
-    except OSError:
+    except (OSError, struct.error):
+        # struct.error: a <8-byte reply used to crash the whole
+        # health run before any report or --fix could happen (v1.33).
         return False, None
 
 
@@ -121,6 +123,36 @@ def cert_days():
         return None
 
 
+def zero_server_group_recent(minutes=15):
+    """A nameserver group with zero upstream servers makes SmartDNS
+    fail every uncached name in its sets instantly (SERVFAIL at
+    0 ms) while cached names keep working — a failure mode that
+    hid behind the cache for days on the reference node (v1.38).
+    SmartDNS logs a WARN ('total server number 0') the moment a
+    query hits such a group; surface it as a health problem."""
+    path = "/var/log/ofogheamn-dns/smartdns.log"
+    try:
+        import datetime
+        cutoff = datetime.datetime.now() - datetime.timedelta(minutes=minutes)
+        with open(path, "rb") as fh:
+            fh.seek(0, os.SEEK_END)
+            size = fh.tell()
+            fh.seek(max(0, size - 2_000_000))
+            tail = fh.read().decode("utf-8", "replace")
+        for line in tail.splitlines():
+            if "total server number 0" not in line:
+                continue
+            try:
+                stamp = datetime.datetime.strptime(line[1:20], "%Y-%m-%d %H:%M:%S")
+            except Exception:
+                return True
+            if stamp >= cutoff:
+                return True
+    except Exception:
+        return False
+    return False
+
+
 def main():
     fix = "--fix" in sys.argv
     as_json = "--json" in sys.argv
@@ -133,6 +165,9 @@ def main():
         ok, ms = dns_query_ok()
     if not ok:
         problems.append("dns-no-answer")
+
+    if zero_server_group_recent():
+        problems.append("dns-zero-server-group")
 
     states = {k: svc_state(v) for k, v in SERVICES.items()}
     # mesh/wg may legitimately be off (opt-in features); only the

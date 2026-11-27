@@ -1,0 +1,21 @@
+[Unit]
+Description=Ofogheamn DNS — apply the firewall mode at boot
+Documentation=https://github.com/saman-ghannadzadeh/Ofogheamn_Dns_Project_Gaming
+# iptables/ip6tables state is runtime-only: without this unit a
+# reboot silently dropped every guard (the OFOGH chains, the INPUT
+# jumps, the Hy2 NAT hop redirect, the MSS clamps) while mode.conf
+# and the panel still reported "private" — on a node whose mixed
+# proxy runs with an empty user list that re-created an open proxy
+# (v1.33; the gap was found by audit, the live node had simply
+# never rebooted since install).
+After=network-online.target
+Wants=network-online.target
+Before=ofogheamn-dns.service ofogheamn-proxy.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/ofogheamn-firewall
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

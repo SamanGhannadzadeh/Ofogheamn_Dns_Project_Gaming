@@ -20,10 +20,13 @@ PPTP_POOL="$(get pptp_pool)"; PPTP_POOL="${PPTP_POOL:-10.68.0.0/24}"
   || { echo "vpn.conf incomplete (need user, pass, psk)"; exit 1; }
 
 # --- render credential files (edit vpn.conf, never these) ---
+# Escape backslashes and quotes first (v1.33): a " in a password
+# used to silently produce broken daemon credential files.
+esc() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 printf '%s\n%s\n' "# rendered by ofogheamn-vpn-setup from $CONF" \
-  "\"$VPN_USER\" * \"$VPN_PASS\" *" > /etc/ppp/chap-secrets
+  "\"$(esc "$VPN_USER")\" * \"$(esc "$VPN_PASS")\" *" > /etc/ppp/chap-secrets
 chmod 600 /etc/ppp/chap-secrets
-printf ': PSK "%s"\n' "$VPN_PSK" > /etc/ipsec.secrets
+printf ': PSK "%s"\n' "$(esc "$VPN_PSK")" > /etc/ipsec.secrets
 chmod 600 /etc/ipsec.secrets
 
 # Kernel helpers: MPPE for PPTP, kernel L2TP for xl2tpd.

@@ -122,8 +122,15 @@ async def pump(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
     except Exception:
         pass
     finally:
+        # Half-close, not close (v1.33): closing the shared transport
+        # on one direction's EOF killed the opposite direction
+        # mid-stream — a client that FINs after its request could
+        # lose the tail of the response. Signal EOF to the peer and
+        # let the sibling pump finish; handle() closes both writers
+        # once both pumps are done.
         try:
-            writer.close()
+            if writer.can_write_eof():
+                writer.write_eof()
         except Exception:
             pass
 
@@ -152,8 +159,17 @@ async def handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
             asyncio.open_connection(target[0], target[1]), timeout=10)
         up_writer.write(hello)
         await up_writer.drain()
+        # Per-connection log (v1.33): the live node's debugging
+        # depended on seeing which SNI went where, in the journal.
+        print(f"relay {writer.get_extra_info('peername')} "
+              f"sni={sni} -> {target[0]}:{target[1]}", flush=True)
         await asyncio.gather(pump(reader, up_writer),
                              pump(up_reader, writer))
+        for w in (writer, up_writer):
+            try:
+                w.close()
+            except Exception:
+                pass
     except Exception as e:
         print(f"sni relay error: {e}", file=sys.stderr, flush=True)
         try:
