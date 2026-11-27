@@ -706,6 +706,10 @@ grep -q '180.149.45.237' clients/windows/Set-OfoghDns.ps1 && grep -q 'Restore' c
 chk "windows setter targets the node with a restore path" $?
 [ -f scripts/ofogh-telegram-bot.py ] && grep -q 'custom_emoji' scripts/ofogh-telegram-bot.py && grep -q 'bot-admins' scripts/ofogh-telegram-bot.py
 chk "telegram admin bot ships with premium emoji + admin gating" $?
+echo "== v1.48: vless-tls flavor =="
+test -f scripts/ofogh-vless-tls.sh && grep -q 'vless-tls.json' scripts/ofogh-vless-tls.sh && grep -q 'xtls-rprx-vision' scripts/ofogh-vless-tls.sh && grep -q '2053' scripts/ofogh-vless-tls.sh
+chk "vless-tls applier ships (descriptor, vision flow, port 2053)" $?
+
 echo "== v1.47: upstream prune tool =="
 test -f scripts/ofogh-prune-upstreams.sh && grep -qF '8\.8\.8\.8' scripts/ofogh-prune-upstreams.sh && grep -q 'group edge' scripts/ofogh-prune-upstreams.sh
 chk "prune tool ships and targets the slow edge/default members" $?

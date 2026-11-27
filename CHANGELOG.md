@@ -1,3 +1,25 @@
+## v1.48 — 2026-11-27 (VLESS + real TLS + Vision inbound: the classic panel flavor)
+
+Field analysis of a large commercial Iranian subscription
+service showed its whole fleet is one recipe: VLESS over TCP
+with real TLS and xtls-rprx-vision on port 8443, on Hetzner
+Germany. Its stability in Iran is the TCP/Vision profile
+(no UDP for the carrier to kill, no QUIC fingerprint) plus
+clean transit — and the protocol half of that is replicable.
+
+`scripts/ofogh-vless-tls.sh` adds the same flavor to the
+node: a VLESS + TCP + TLS + Vision inbound on tcp/2053,
+presenting the node's real Let's Encrypt certificate
+(SNI ofogheamn.mytunnel.org; clients dial the node IP and
+verify against the SNI, so local resolver poisoning of the
+name cannot break the tunnel bootstrap). The inbound joins
+the firewall's guarded set through a `vless-tls.json`
+descriptor, exactly like TUIC/AnyTLS/REALITY, and the
+certificate sync hook now restarts the proxy as well so a
+renewed cert reaches this inbound without a manual restart.
+Verified live on the Baku node with a loopback client doing
+full certificate validation: HTTP 204.
+
 ## v1.47 — 2026-11-27 (measured tuning pass: prune slow upstreams, refresh edge pins)
 
 A full node audit and re-benchmark, applied live on the Baku
